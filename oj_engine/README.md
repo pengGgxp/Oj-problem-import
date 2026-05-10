@@ -105,13 +105,37 @@ asyncio.run(main())
 
 ### 环境变量配置
 
-需要设置以下环境变量:
+使用 `.env` 文件管理所有配置 (推荐):
 
 ```bash
-# OpenAI API Key (用于 LLM 调用)
-export OPENAI_API_KEY="your-api-key"
+# 复制示例文件
+cp .env.example .env
 
-# 如果使用其他 LLM 提供商,配置相应的环境变量
+# 编辑 .env 文件,填入您的配置
+```
+
+**主要配置项:**
+
+```ini
+# LLM 配置
+LLM_OPENAI_API_KEY=sk-your-api-key-here
+LLM_PARSER_MODEL=gpt-4
+LLM_GENERATOR_MODEL=gpt-4
+LLM_PARSER_TEMPERATURE=0.1
+LLM_GENERATOR_TEMPERATURE=0.2
+
+# Docker 配置
+DOCKER_DEFAULT_IMAGE=python:3.10-slim
+DOCKER_DEFAULT_MEM_LIMIT=512m
+
+# 工作流配置
+WORKFLOW_MAX_RETRIES=3
+```
+
+也可以使用标准环境变量:
+
+```bash
+export OPENAI_API_KEY="your-api-key"
 ```
 
 ### 运行示例

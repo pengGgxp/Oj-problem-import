@@ -1,9 +1,9 @@
 """
 Generator 节点 - 生成标答代码和数据生成器
 """
-from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from ..state import GraphState, CodeArtifact
+from ..config import settings
 
 
 def generate_code_node(state: GraphState) -> GraphState:
@@ -42,17 +42,17 @@ def generate_code_node(state: GraphState) -> GraphState:
 2. **数据生成器(generator)**: Python 脚本,用于生成符合题目要求的测试数据
 
 要求:
-- 标答代码可以使用 C++ 或 Python
+- 标答代码使用 Python
 - 数据生成器必须使用 Python,利用 random 模块
 - 数据生成器应该能生成各种边界情况和极端情况
 - 代码必须完整可运行,不要省略任何部分
-- 如果需要特殊判题器(SPJ),也请生成 checker.cpp
+- 如果需要特殊判题器(SPJ),也请生成 checker.py
 
 请以 JSON 格式返回:
 ```json
 {{
   "solution_code": "...",
-  "solution_language": "cpp" 或 "python",
+  "solution_language": "python",
   "generator_code": "...",
   "checker_code": "..." (可选)
 }}
@@ -70,8 +70,8 @@ def generate_code_node(state: GraphState) -> GraphState:
 请生成完整的代码。""")
     ])
     
-    # 初始化 LLM
-    llm = ChatOpenAI(model="gpt-4", temperature=0.2)
+    # 初始化 LLM (使用配置)
+    llm = settings.get_llm_client(model_type="generator")
     
     try:
         # 调用 LLM

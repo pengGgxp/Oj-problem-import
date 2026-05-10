@@ -34,7 +34,20 @@ class SandboxExecutor:
         self.image = image
         self.mem_limit = mem_limit
         self.cpu_quota = cpu_quota
-        self.client = docker.from_env()
+        
+        # 初始化 Docker 客户端,添加错误处理
+        try:
+            self.client = docker.from_env()
+            # 测试连接
+            self.client.ping()
+        except docker.errors.DockerException as e:
+            raise RuntimeError(
+                f"无法连接到 Docker Daemon。请确保:\n"
+                f"1. Docker Desktop 正在运行\n"
+                f"2. Docker Daemon 已启动\n"
+                f"3. 当前用户有 Docker 权限\n"
+                f"错误详情: {str(e)}"
+            )
     
     def execute(self, files: Dict[str, str], commands: List[str], 
                 timeout: int = 30) -> ExecutionResult:
@@ -49,9 +62,25 @@ class SandboxExecutor:
         Returns:
             ExecutionResult: 执行结果
         """
+        import tempfile
+        import os
+        
         container = None
+        temp_dir = None
+        
         try:
-            # 启动容器
+            # 创建临时目录
+            temp_dir = tempfile.mkdtemp()
+            print(f"[Sandbox] 创建临时目录: {temp_dir}")
+            
+            # 将文件写入临时目录
+            for filename, content in files.items():
+                filepath = os.path.join(temp_dir, filename)
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                print(f"  - 写入: {filename} ({len(content)} bytes)")
+            
+            # 启动容器,挂载临时目录
             container = self.client.containers.run(
                 image=self.image,
                 command="sleep infinity",
@@ -59,13 +88,12 @@ class SandboxExecutor:
                 mem_limit=self.mem_limit,
                 cpu_quota=self.cpu_quota,
                 network_disabled=True,  # 禁用网络
-                read_only=True,  # 只读文件系统
-                tmpfs={'/tmp': 'rw,noexec,nosuid,size=100m'}  # 临时目录
+                volumes={temp_dir: {'bind': '/workspace', 'mode': 'rw'}},  # 读写挂载
+                tmpfs={'/tmp': 'rw,noexec,nosuid,size=100m'},  # 临时目录用于中间文件
+                working_dir='/workspace'
             )
             
-            # 写入文件到容器
-            for filename, content in files.items():
-                self._write_to_container(container, filename, content)
+            print(f"[Sandbox] 容器启动成功,工作目录: /workspace")
             
             # 执行命令
             all_stdout = []
@@ -73,10 +101,14 @@ class SandboxExecutor:
             exit_code = 0
             
             for cmd in commands:
+                # 将命令中的 /tmp 替换为 /workspace
+                cmd = cmd.replace('/tmp', '/workspace')
+                print(f"[Sandbox] 执行: {cmd}")
+                
                 exec_result = container.exec_run(
                     cmd=f"/bin/sh -c '{cmd}'",
                     demux=True,
-                    workdir="/tmp"
+                    workdir='/workspace'
                 )
                 
                 stdout = exec_result.output[0].decode('utf-8', errors='ignore') if exec_result.output[0] else ""
@@ -137,28 +169,31 @@ class SandboxExecutor:
                     container.remove(force=True)
                 except:
                     pass
+            
+            # 清理临时目录
+            if temp_dir:
+                try:
+                    import shutil
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+                    print(f"[Sandbox] 清理临时目录: {temp_dir}")
+                except:
+                    pass
     
     def _write_to_container(self, container, filename: str, content: str):
         """
-        将文件内容写入容器
+        将文件内容写入容器 (使用 exec_run 方法)
         
         Args:
             container: Docker 容器对象
             filename: 文件名
             content: 文件内容
         """
-        import tarfile
-        import io
+        import base64
         
-        # 创建 tar 包
-        tar_stream = io.BytesIO()
-        with tarfile.open(fileobj=tar_stream, mode='w') as tar:
-            content_bytes = content.encode('utf-8')
-            info = tarfile.TarInfo(name=filename)
-            info.size = len(content_bytes)
-            tar.addfile(info, io.BytesIO(content_bytes))
+        # 使用 base64 编码内容,通过 shell 命令写入文件
+        encoded_content = base64.b64encode(content.encode('utf-8')).decode('ascii')
+        cmd = f"echo '{encoded_content}' | base64 -d > /tmp/{filename}"
         
-        tar_stream.seek(0)
-        
-        # 将 tar 包放入容器
-        container.put_archive('/tmp', tar_stream)
+        result = container.exec_run(cmd)
+        if result.exit_code != 0:
+            raise RuntimeError(f"Failed to write file {filename}: {result.output.decode()}")

@@ -6,6 +6,50 @@
 2. **Docker Desktop** - 需要安装并运行
 3. **OpenAI API Key** - 用于 LLM 调用
 
+## 配置步骤
+
+### 1. 创建 .env 文件
+
+复制 `.env.example` 为 `.env`:
+
+```bash
+cp .env.example .env
+```
+
+### 2. 配置环境变量
+
+编辑 `.env` 文件,填入您的配置:
+
+```ini
+# OpenAI API Key (必填)
+LLM_OPENAI_API_KEY=sk-your-api-key-here
+
+# 或者使用标准环境变量 (也支持)
+# OPENAI_API_KEY=sk-your-api-key-here
+
+# 自定义模型 (可选)
+LLM_PARSER_MODEL=gpt-4
+LLM_GENERATOR_MODEL=gpt-4
+
+# 其他配置...
+```
+
+**支持的配置项:**
+
+| 变量名 | 说明 | 默认值 |
+|--------|------|--------|
+| `LLM_OPENAI_API_KEY` | OpenAI API Key | - |
+| `LLM_OPENAI_BASE_URL` | 自定义 API 端点 | - |
+| `LLM_PARSER_MODEL` | Parser 使用的模型 | gpt-4 |
+| `LLM_GENERATOR_MODEL` | Generator 使用的模型 | gpt-4 |
+| `LLM_PARSER_TEMPERATURE` | Parser 温度参数 | 0.1 |
+| `LLM_GENERATOR_TEMPERATURE` | Generator 温度参数 | 0.2 |
+| `DOCKER_DEFAULT_IMAGE` | Docker 镜像 | python:3.10-slim |
+| `DOCKER_DEFAULT_MEM_LIMIT` | 内存限制 | 512m |
+| `WORKFLOW_MAX_RETRIES` | 最大重试次数 | 3 |
+
+> **提示**: 也可以使用标准的 `OPENAI_API_KEY` 环境变量,系统会自动识别。
+
 ## 安装步骤
 
 ### 1. 安装依赖
@@ -15,34 +59,19 @@
 uv sync
 ```
 
-### 2. 配置环境变量
-
-#### Windows (PowerShell)
-```powershell
-$env:OPENAI_API_KEY="your-api-key-here"
-```
-
-#### Windows (CMD)
-```cmd
-set OPENAI_API_KEY=your-api-key-here
-```
-
-#### Linux/Mac
-```bash
-export OPENAI_API_KEY="your-api-key-here"
-```
-
-### 3. 验证安装
+### 2. 验证配置
 
 ```bash
-# 运行快速测试
-uv run python test_quick.py
+# 运行配置测试
+uv run python test_config.py
 ```
 
 应该看到:
 ```
-🎉 所有测试通过!
+🎉 所有配置测试通过!
 ```
+
+### 3. 运行工作流测试
 
 ## 快速使用
 
@@ -132,12 +161,59 @@ if __name__ == "__main__":
 
 ## 常见问题
 
+### Q: 如何配置 API Key?
+
+**A**: 有两种方式:
+
+1. **使用 .env 文件 (推荐)**:
+   ```ini
+   # .env 文件
+   LLM_OPENAI_API_KEY=sk-your-key-here
+   ```
+
+2. **使用环境变量**:
+   ```bash
+   export OPENAI_API_KEY=sk-your-key-here
+   ```
+
+### Q: 如何使用自定义模型或 API 端点?
+
+**A**: 在 `.env` 文件中配置:
+```ini
+LLM_OPENAI_BASE_URL=https://your-custom-endpoint.com/v1
+LLM_PARSER_MODEL=gpt-3.5-turbo
+LLM_GENERATOR_MODEL=gpt-3.5-turbo
+```
+
 ### Q: Docker 无法连接?
 
 **A**: 确保 Docker Desktop 正在运行:
 ```bash
 docker ps
 ```
+
+如果仍然有问题,运行诊断脚本:
+```bash
+uv run python test_docker.py
+```
+
+常见解决方案:
+1. 重启 Docker Desktop
+2. 检查 Docker Daemon 是否启动
+3. Windows 用户: 以管理员身份运行终端
+4. 确保 `python:3.10-slim` 镜像已下载:
+   ```bash
+   docker pull python:3.10-slim
+   ```
+
+### Q: 沙箱执行失败?
+
+**A**: 运行沙箱测试验证:
+```bash
+uv run python test_sandbox_execution.py
+```
+
+如果测试通过,说明沙箱正常工作。
 
 ### Q: OpenAI API 调用失败?
 
@@ -169,10 +245,65 @@ state = initialize_state(problem, max_retries=5)
 - 根据需要添加 FastAPI 接口层
 - 集成到更大的系统中
 
+## 产物管理
+
+工作流执行完成后,所有生成的代码和测试数据会自动保存到 `outputs/` 目录。
+
+### 查看已保存的产物
+
+```bash
+# 列出所有产物
+uv run python view_outputs.py list
+
+# 查看某个产物的详情
+uv run python view_outputs.py show outputs/20260510_123456_A_B_Problem
+```
+
+### 产物目录结构
+
+```
+outputs/
+└── 20260510_123456_A_B_Problem/
+    ├── README.md              # 说明文档
+    ├── metadata.json          # 元数据
+    ├── codes/
+    │   ├── solution.py        # 标答代码
+    │   └── generator.py       # 数据生成器
+    ├── test_cases.json        # 测试数据
+    └── error_history.json     # 错误历史(如果有)
+```
+
+### 使用保存的产物
+
+```python
+from oj_engine import OutputManager
+from pathlib import Path
+
+# 加载之前保存的产物
+manager = OutputManager()
+result = manager.load_result(Path("outputs/20260510_123456_A_B_Problem"))
+
+# 访问代码
+print(result['codes']['solution.py'])
+
+# 访问测试数据
+print(result['test_cases'])
+```
+
 ## 技术支持
 
 如有问题,请检查:
 1. 所有依赖是否正确安装 (`uv sync`)
-2. Docker 是否正常运行
-3. 环境变量是否正确设置
-4. 查看控制台输出的错误信息
+2. `.env` 文件是否正确配置
+3. Docker 是否正常运行
+4. API Key 是否有效
+5. 查看控制台输出的错误信息
+
+**配置相关命令:**
+```bash
+# 测试配置
+uv run python test_config.py
+
+# 查看当前配置值
+uv run python -c "from oj_engine import settings; print(settings.llm.parser_model)"
+```

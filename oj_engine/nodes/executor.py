@@ -22,8 +22,29 @@ def execute_code_node(state: GraphState) -> GraphState:
     """
     print("[Executor] 开始在沙箱中执行代码...")
     
-    codes = state["codes"]
-    requirements = state["requirements"]
+    codes = state.get("codes")
+    
+    # 检查代码是否生成成功
+    if not codes:
+        print("[Executor] ⚠ 代码未生成,跳过执行")
+        from ..state import ExecutionResult
+        state["execution_result"] = ExecutionResult(
+            status="error",
+            exit_code=-1,
+            stderr="代码生成失败,无法执行",
+            error_type="code_generation_failed"
+        )
+        state["current_step"] = "reflecting"
+        state["status"] = "failed"
+        return state
+    
+    requirements = state.get("requirements")
+    
+    # 检查需求是否解析成功
+    if not requirements:
+        print("[Executor] ⚠ 需求未解析,使用默认配置")
+        from ..state import ProblemRequirements
+        requirements = ProblemRequirements()
     
     # 初始化沙箱执行器
     executor = SandboxExecutor(

@@ -7,9 +7,10 @@ from .nodes.parser import parse_problem_node
 from .nodes.generator import generate_code_node
 from .nodes.executor import execute_code_node
 from .nodes.reflector import should_retry
+from .services.output_manager import OutputManager
 
 
-def create_workflow(max_retries: int = 3) -> StateGraph:
+def create_workflow(max_retries: int = 3, auto_save: bool = True) -> StateGraph:
     """
     创建 OJ 题目生成工作流
     
@@ -18,6 +19,7 @@ def create_workflow(max_retries: int = 3) -> StateGraph:
     
     Args:
         max_retries: 最大重试次数
+        auto_save: 是否自动保存产物
         
     Returns:
         编译后的 LangGraph 工作流
@@ -31,6 +33,22 @@ def create_workflow(max_retries: int = 3) -> StateGraph:
     workflow.add_node("generator", generate_code_node)
     workflow.add_node("executor", execute_code_node)
     
+    # 如果启用自动保存,添加保存节点
+    if auto_save:
+        output_manager = OutputManager()
+        
+        def save_output_node(state: GraphState) -> GraphState:
+            """保存产物节点"""
+            try:
+                # 从题目描述中提取标题(第一行)
+                problem_title = state["problem_description"].strip().split('\n')[0][:50]
+                output_manager.save_result(state, problem_title)
+            except Exception as e:
+                print(f"[Warning] 保存产物失败: {e}")
+            return state
+        
+        workflow.add_node("save_output", save_output_node)
+    
     # 设置入口点
     workflow.set_entry_point("parser")
     
@@ -39,14 +57,26 @@ def create_workflow(max_retries: int = 3) -> StateGraph:
     workflow.add_edge("generator", "executor")
     
     # 添加条件边(Reflector 决定是重试还是结束)
-    workflow.add_conditional_edges(
-        "executor",
-        should_retry,
-        {
-            "generator": "generator",  # 重试
-            "end": END  # 结束
-        }
-    )
+    if auto_save:
+        # 如果需要保存,先保存到 save_output,然后结束
+        workflow.add_conditional_edges(
+            "executor",
+            should_retry,
+            {
+                "generator": "generator",  # 重试
+                "end": "save_output"  # 结束后保存
+            }
+        )
+        workflow.add_edge("save_output", END)
+    else:
+        workflow.add_conditional_edges(
+            "executor",
+            should_retry,
+            {
+                "generator": "generator",  # 重试
+                "end": END  # 直接结束
+            }
+        )
     
     # 编译工作流
     app = workflow.compile()

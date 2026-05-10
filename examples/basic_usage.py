@@ -1,6 +1,13 @@
 """
 使用示例 - 演示如何运行 OJ 题目生成工作流
 """
+import sys
+from pathlib import Path
+
+# 添加项目根目录到 Python 路径
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
 import asyncio
 from oj_engine import create_workflow, initialize_state
 

@@ -1,9 +1,9 @@
 """
 Parser 节点 - 解析题目需求
 """
-from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from ..state import GraphState, ProblemRequirements
+from ..config import settings
 import json
 
 
@@ -44,8 +44,8 @@ def parse_problem_node(state: GraphState) -> GraphState:
         ("user", "题目描述:\n{problem_description}")
     ])
     
-    # 初始化 LLM (这里使用占位符,实际使用时需要配置 API key)
-    llm = ChatOpenAI(model="gpt-4", temperature=0.1)
+    # 初始化 LLM (使用配置)
+    llm = settings.get_llm_client(model_type="parser")
     
     try:
         # 调用 LLM
