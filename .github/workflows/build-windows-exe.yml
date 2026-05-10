@@ -29,13 +29,20 @@ jobs:
         pip install uv
         uv sync
         
-    - name: Install Nuitka
+    - name: Install Nuitka with onefile support
       run: |
-        pip install nuitka
+        # 使用 uv 安装 Nuitka 到虚拟环境
+        uv pip install "nuitka[onefile]"
         
     - name: Verify Nuitka installation
       run: |
-        nuitka --version
+        uv run nuitka --version
+        
+    - name: Verify installed packages
+      run: |
+        pip list | Select-String "questionary"
+        pip list | Select-String "click"
+        pip list | Select-String "platformdirs"
         
     - name: Clean previous builds
       run: |
@@ -46,7 +53,7 @@ jobs:
         
     - name: Build EXE with Nuitka
       run: |
-        nuitka --standalone `
+        uv run nuitka --standalone `
           --onefile `
           --include-package=oj_engine `
           --include-package=click `
