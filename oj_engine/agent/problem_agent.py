@@ -33,8 +33,11 @@ REACT_SYSTEM_PROMPT = """你是一个专业的 OJ (Online Judge) 题目内容生
 1. `solution.py` - 标答代码 (Python)
 2. `generator.py` - 数据生成器 (Python)
 3. `tests/` 目录 - 包含成对的 `.in` 和 `.out` 文件
-   - 例如: `1.in`, `1.out`, `2.in`, `2.out`, ..., `10.in`, `10.out`
-   - 共10组测试数据 (3小/5中/2大)
+   - **第1组必须是题目中的样例输入输出** (如果题目提供了样例)
+   - 其余测试数据由 generator 生成
+   - 例如: `1.in`, `1.out` (样例), `2.in`, `2.out`, ..., `{n}.in`, `{n}.out`
+   - **默认生成10组测试数据**，除非题目明确要求其他数量
+   - **数据分布**: 30%小数据 + 50%中等数据 + 20%大数据/边缘情况
 
 **重要**: 在调用 save_outputs_to_host 之前，必须使用 delete_file 工具删除所有其他临时文件！
 
@@ -44,6 +47,7 @@ REACT_SYSTEM_PROMPT = """你是一个专业的 OJ (Online Judge) 题目内容生
    - 算法类型 (排序、搜索、图论、动态规划等)
    - 数据范围 (n 的最大值、数值范围等)
    - 输入输出格式
+   - **提取样例输入输出** (如果题目提供了样例)
 
 2. **生成并保存标答**: 编写正确的 solution 代码 (必须使用 Python)
    - 确保算法正确性
@@ -64,11 +68,21 @@ REACT_SYSTEM_PROMPT = """你是一个专业的 OJ (Online Judge) 题目内容生
 
 5. **批量生成测试数据**: 
    - 创建 `tests/` 目录
-   - 循环生成10组测试数据:
+   - **确定测试数据数量**:
+     - 如果题目明确要求数量，使用题目要求的数量
+     - 否则默认生成10组测试数据
+   - **第1组: 使用题目中的样例** (如果有)
+     a. 将样例输入保存为 `tests/1.in`
+     b. 运行 solution 验证输出是否与样例输出一致
+     c. 将样例输出保存为 `tests/1.out`
+   - **第2-N组: 由 generator 生成** (N为总数量)
      a. 使用 generator 生成输入，保存为 `tests/{i}.in`
      b. 使用 solution 处理输入，保存输出为 `tests/{i}.out`
      c. 验证输出正确性
-   - 确保数据分布: 3组小数据 + 5组中等数据 + 2组大数据
+   - **确保数据分布**: 30%小数据 + 50%中等数据 + 20%大数据/边缘情况
+     - 小数据: 边界值、特殊情况、最小规模
+     - 中等数据: 常规规模、典型场景
+     - 大数据/边缘: 最大规模、极端情况、最坏情况
 
 6. **清理临时文件**: **关键步骤!**
    - 使用 delete_file 删除所有测试过程中创建的临时文件
@@ -127,14 +141,20 @@ REACT_SYSTEM_PROMPT = """你是一个专业的 OJ (Online Judge) 题目内容生
 3. **避免重复传输代码**: 不要在参数中传递完整代码,这会浪费 token
 4. **检查结果**: 每次执行后验证结果是否合理
 5. **错误处理**: 如果失败,分析原因并调整策略
-6. **数据质量**: 确保最终数据符合 3小/5中/2大 的分布
-7. **代码质量**: 标答必须正确,generator 必须能生成有效数据
-8. **产物清理**: **最关键!** 在保存前必须删除所有临时文件,只保留 solution.py, generator.py 和 tests/ 目录
+6. **样例优先**: **如果题目提供了样例输入输出，第1组测试数据必须是样例**
+7. **数据数量**: **默认生成10组测试数据**，除非题目明确要求其他数量
+8. **数据分布**: 确保测试数据符合 **30%小 + 50%中 + 20%大/边缘** 的分布
+9. **代码质量**: 标答必须正确,generator 必须能生成有效数据
+10. **产物清理**: **最关键!** 在保存前必须删除所有临时文件,只保留 solution.py, generator.py 和 tests/ 目录
 
 ## 示例流程
 
 ```
-Thought: 我需要先理解题目要求,然后生成标答代码并保存
+Thought: 我需要先理解题目要求,提取样例输入输出
+Action: 分析题目描述
+Observation: 题目提供了样例: 输入 "3 5", 输出 "8"。题目未明确要求测试数据数量，使用默认10组。
+
+Thought: 生成标答代码并保存
 Action: write_code_file(filename="solution.py", code="...")
 Observation: {'success': True, 'filepath': 'solution.py', 'size': 150}
 
@@ -142,19 +162,23 @@ Thought: 现在需要生成数据生成器并保存
 Action: write_code_file(filename="generator.py", code="...")
 Observation: {'success': True, 'filepath': 'generator.py', 'size': 200}
 
-Thought: 构造测试用例验证标答是否正确
-Action: write_code_file(filename="test_input.txt", code="3 5")
-Observation: {'success': True, 'filepath': 'test_input.txt', 'size': 4}
+Thought: 创建 tests 目录并将样例作为第1组测试数据
+Action: write_code_file(filename="tests/1.in", code="3 5")
+Observation: {'success': True, 'filepath': 'tests/1.in', 'size': 4}
 
-Thought: 运行标答验证输出
-Action: execute_code(code_file="solution.py", input_file="test_input.txt")
+Thought: 运行标答验证样例输出
+Action: execute_code(code_file="solution.py", input_file="tests/1.in")
 Observation: {'stdout': '8\n', 'exit_code': 0, 'status': 'success'}
 
-Thought: 标答正确,现在创建 tests 目录并生成10组测试数据
-Action: 循环执行 generator 和 solution,将结果保存到 tests/{i}.in 和 tests/{i}.out
-Observation: 生成了10组测试数据 (tests/1.in, tests/1.out, ..., tests/10.in, tests/10.out)
+Thought: 标答输出与样例一致,保存样例输出
+Action: write_code_file(filename="tests/1.out", code="8")
+Observation: {'success': True, 'filepath': 'tests/1.out', 'size': 1}
 
-Thought: 检查数据强度分布是否符合要求
+Thought: 现在生成其余9组测试数据 (2-10)，确保分布为 3小+5中+2大
+Action: 循环执行 generator 和 solution,将结果保存到 tests/{i}.in 和 tests/{i}.out (i=2..10)
+Observation: 生成了9组测试数据 (tests/2.in, tests/2.out, ..., tests/10.in, tests/10.out)
+
+Thought: 检查后9组数据强度分布是否符合 30%小+50%中+20%大 的要求
 Action: 分析输入数据的规模和特征
 Observation: 分布为 small=30%, medium=50%, large=20%, 符合要求!
 
@@ -269,9 +293,12 @@ class ProblemGenerationAgent:
 要求:
 1. 生成正确的标答代码 (solution) - **必须使用 Python**
 2. 生成数据生成器 (generator) - **必须使用 Python**
-3. 生成10组测试数据 (3小/5中/2大),保存为 tests/{{i}}.in 和 tests/{{i}}.out
+3. 生成测试数据:
+   - **第1组必须是题目中的样例输入输出** (如果题目提供了样例)
+   - **测试数据数量**: 如果题目明确要求数量，使用题目要求的数量；否则默认生成10组
+   - 其余测试数据由 generator 生成,保存为 tests/{{i}}.in 和 tests/{{i}}.out
 4. 确保所有测试数据都能被标答正确处理
-5. 确保数据强度分布符合要求
+5. 确保测试数据强度分布符合要求: **30%小 + 50%中 + 20%大/边缘**
 
 **重要约束**:
 - 所有代码必须使用 Python 语言
