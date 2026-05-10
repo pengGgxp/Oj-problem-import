@@ -1,0 +1,14 @@
+[project]
+name = "oj-problem-import"
+version = "0.1.0"
+description = "AI OJ Content Engine - 智能 OJ 题目生成引擎"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "langgraph>=0.2.0",
+    "langchain>=0.3.0",
+    "langchain-openai>=0.2.0",
+    "docker>=7.0.0",
+    "fastapi>=0.110.0",
+    "pydantic>=2.0.0",
+]
