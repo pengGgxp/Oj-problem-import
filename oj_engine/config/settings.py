@@ -102,6 +102,7 @@ class Settings(BaseSettings):
         kwargs = {
             "model": model_name,
             "temperature": temperature,
+            "extra_body": {"thinking": {"type": "disabled"}}
         }
         
         # 如果设置了 API Key,优先使用配置中的值
