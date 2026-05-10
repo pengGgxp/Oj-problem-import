@@ -12,3 +12,11 @@ wheels/
 # Environment variables
 .env
 **/outputs/**
+
+# Nuitka build files
+*.build/
+*.dist/
+*.onefile-build/
+*.so
+*.dll
+*.dylib
