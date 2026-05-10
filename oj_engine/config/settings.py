@@ -1,8 +1,13 @@
 """
 配置管理模块 - 使用 Pydantic Settings 管理环境变量
+
+支持双配置源：
+1. 用户配置（优先级高）：从用户目录的 config.json 加载
+2. 环境变量（回退）：从 .env 文件或系统环境变量加载
 """
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
+import os
 
 
 class LLMSettings(BaseSettings):
@@ -68,7 +73,42 @@ class Settings(BaseSettings):
     全局配置类
     
     整合所有子配置,提供统一的配置访问接口
+    优先从用户配置加载，如果没有则使用环境变量
     """
+    
+    def __init__(self, **kwargs):
+        # 尝试从用户配置加载
+        try:
+            from ..config_manager import load_config
+            user_config = load_config()
+            
+            if user_config and 'llm' in user_config:
+                llm_config = user_config['llm']
+                
+                # 将用户配置转换为环境变量格式
+                provider = llm_config.get('provider', 'openai')
+                api_key = llm_config.get('api_key', '')
+                model = llm_config.get('model', 'gpt-3.5-turbo')
+                base_url = llm_config.get('base_url')
+                
+                # 设置 API Key 和模型
+                if api_key:
+                    kwargs.setdefault('llm_openai_api_key', api_key)
+                    # 同时设置环境变量，供 LangChain 使用
+                    os.environ['OPENAI_API_KEY'] = api_key
+                
+                if model:
+                    kwargs.setdefault('llm_parser_model', model)
+                    kwargs.setdefault('llm_generator_model', model)
+                
+                if base_url:
+                    kwargs.setdefault('llm_openai_base_url', base_url)
+                    os.environ['OPENAI_BASE_URL'] = base_url
+        except Exception as e:
+            # 如果加载用户配置失败，静默回退到环境变量
+            pass
+        
+        super().__init__(**kwargs)
     
     llm: LLMSettings = LLMSettings()
     docker: DockerSettings = DockerSettings()

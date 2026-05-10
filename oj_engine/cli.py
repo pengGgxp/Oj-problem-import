@@ -7,6 +7,8 @@ import sys
 import click
 from pathlib import Path
 from oj_engine.agent import ProblemGenerationAgent
+from oj_engine.config_manager import is_configured, load_config, mask_api_key, get_config_path
+from oj_engine.config_wizard import run_config_wizard
 
 
 @click.group()
@@ -46,6 +48,15 @@ def generate(file_path, description, max_iterations, output_dir):
         # 自定义参数
         oj-engine generate -f problem.txt -m 30 -o ./results
     """
+    # 检查配置
+    if not is_configured():
+        click.echo("\n⚠ 检测到未配置，启动配置向导...\n")
+        success = run_config_wizard()
+        if not success:
+            click.echo("\n✗ 配置失败，无法继续执行", err=True)
+            sys.exit(1)
+        click.echo("\n配置完成！继续执行任务...\n")
+    
     # 验证参数
     if not file_path and not description:
         click.echo("错误: 必须提供 --file 或 --description 参数", err=True)
@@ -128,6 +139,31 @@ def generate(file_path, description, max_iterations, output_dir):
         import traceback
         traceback.print_exc()
         sys.exit(1)
+
+
+@main.command()
+def configure():
+    """重新配置 OJ Engine"""
+    click.echo("启动配置向导...")
+    success = run_config_wizard()
+    if not success:
+        sys.exit(1)
+
+
+@main.command()
+def show_config():
+    """显示当前配置（隐藏敏感信息）"""
+    config = load_config()
+    if config:
+        click.echo("当前配置:")
+        click.echo(f"  LLM 提供商: {config['llm']['provider']}")
+        click.echo(f"  模型: {config['llm']['model']}")
+        click.echo(f"  API Key: {mask_api_key(config['llm']['api_key'])}")
+        if config['llm'].get('base_url'):
+            click.echo(f"  Base URL: {config['llm']['base_url']}")
+        click.echo(f"  配置文件: {get_config_path()}")
+    else:
+        click.echo("未配置，请运行 'oj-engine configure'")
 
 
 if __name__ == "__main__":

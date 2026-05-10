@@ -16,6 +16,8 @@ dependencies = [
     "langchain-community>=0.4.1",
     "langchain-classic>=1.0.7",
     "click>=8.0.0",
+    "platformdirs>=4.0.0",
+    "questionary>=2.0.0",
 ]
 
 [project.scripts]
@@ -23,3 +25,10 @@ oj-engine = "oj_engine.cli:main"
 
 [tool.uv]
 package = true
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["oj_engine*"]
