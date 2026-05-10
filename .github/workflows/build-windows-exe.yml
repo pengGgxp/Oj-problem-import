@@ -1,0 +1,117 @@
+name: Build Windows EXE with Nuitka
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  build-windows:
+    name: Build Windows x64 EXE
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install uv
+        uv sync
+        
+    - name: Install Nuitka
+      run: |
+        pip install nuitka
+        
+    - name: Verify Nuitka installation
+      run: |
+        nuitka --version
+        
+    - name: Clean previous builds
+      run: |
+        if (Test-Path dist) { Remove-Item -Recurse -Force dist }
+        if (Test-Path build) { Remove-Item -Recurse -Force build }
+        if (Test-Path *.build) { Remove-Item -Recurse -Force *.build }
+        if (Test-Path *.dist) { Remove-Item -Recurse -Force *.dist }
+        
+    - name: Build EXE with Nuitka
+      run: |
+        nuitka --standalone `
+          --onefile `
+          --include-package=oj_engine `
+          --include-package=click `
+          --include-package=questionary `
+          --include-package=platformdirs `
+          --include-package=langgraph `
+          --include-package=langchain `
+          --include-package=langchain_openai `
+          --include-package=langchain_community `
+          --include-package=langchain_classic `
+          --include-package=docker `
+          --include-package=pydantic `
+          --include-package=pydantic_settings `
+          --include-package=dotenv `
+          --include-package=fastapi `
+          --python-flag=no_site `
+          --assume-yes-for-downloads `
+          --output-dir=dist `
+          --output-filename=oj-engine.exe `
+          oj_engine/cli.py
+          
+    - name: Verify build output
+      run: |
+        if (Test-Path dist\oj-engine.exe) {
+          $fileInfo = Get-Item dist\oj-engine.exe
+          $fileSizeMB = [math]::Round($fileInfo.Length / 1MB, 2)
+          Write-Host "✓ Build successful!"
+          Write-Host "  File: dist\oj-engine.exe"
+          Write-Host "  Size: $fileSizeMB MB"
+        } else {
+          Write-Host "✗ Build failed - exe not found"
+          exit 1
+        }
+        
+    - name: Test EXE
+      run: |
+        dist\oj-engine.exe --help
+        
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: oj-engine-windows-x64
+        path: dist/oj-engine.exe
+        retention-days: 30
+        
+    - name: Create Release (on tag)
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: dist/oj-engine.exe
+        body: |
+          ## OJ Engine Windows x64 Release
+          
+          ### 使用说明
+          1. 下载 `oj-engine.exe`
+          2. 确保已安装 Docker Desktop
+          3. 首次运行执行: `oj-engine.exe configure`
+          4. 按向导配置 API Key
+          5. 开始生成题目！
+          
+          ### 系统要求
+          - Windows 10/11 x64
+          - Docker Desktop
+          
+          ### 文件大小
+          约 100-200 MB（包含所有依赖）
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
