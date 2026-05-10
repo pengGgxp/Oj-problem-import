@@ -102,7 +102,7 @@ class Settings(BaseSettings):
         kwargs = {
             "model": model_name,
             "temperature": temperature,
-            "extra_body": {"thinking": {"type": "disabled"}}
+            "extra_body": {"thinking": {"type": "disabled"}} if "deepseek" in model_name else None
         }
         
         # 如果设置了 API Key,优先使用配置中的值

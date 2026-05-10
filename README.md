@@ -39,6 +39,27 @@ cp .env.example .env
 
 ### 基本使用
 
+#### 方式一：命令行工具（推荐）
+
+安装依赖后，可以直接使用 `oj-engine` 命令：
+
+```bash
+# 查看帮助
+oj-engine --help
+oj-engine generate --help
+
+# 从文件读取题目描述
+oj-engine generate -f problem.txt
+
+# 直接传入题目描述
+oj-engine generate -d "A+B Problem..."
+
+# 自定义参数
+oj-engine generate -f problem.txt -m 30 -o ./results
+```
+
+#### 方式二：Python API
+
 ```python
 from oj_engine.agent import ProblemGenerationAgent
 
@@ -66,7 +87,10 @@ with ProblemGenerationAgent(max_iterations=20) as agent:
 ### 运行示例
 
 ```bash
-# 运行 Agent 示例
+# 方式一：使用 CLI 命令（推荐）
+oj-engine generate -f problem.txt
+
+# 方式二：运行 Python 示例脚本
 python examples/agent_usage.py
 
 # 查看生成的产物
