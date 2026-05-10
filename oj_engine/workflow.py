@@ -5,6 +5,7 @@ from langgraph.graph import StateGraph, END
 from .state import GraphState
 from .nodes.parser import parse_problem_node
 from .nodes.generator import generate_code_node
+from .nodes.test_data_generator import generate_test_data_node
 from .nodes.executor import execute_code_node
 from .nodes.reflector import should_retry
 from .services.output_manager import OutputManager
@@ -15,7 +16,7 @@ def create_workflow(max_retries: int = 3, auto_save: bool = True) -> StateGraph:
     创建 OJ 题目生成工作流
     
     工作流结构:
-    START -> Parser -> Generator -> Executor -> Reflector -> (Generator | END)
+    START -> Parser -> Generator -> TestDataGenerator -> Executor -> Reflector -> (Generator | END)
     
     Args:
         max_retries: 最大重试次数
@@ -31,6 +32,7 @@ def create_workflow(max_retries: int = 3, auto_save: bool = True) -> StateGraph:
     # 添加节点
     workflow.add_node("parser", parse_problem_node)
     workflow.add_node("generator", generate_code_node)
+    workflow.add_node("test_data_generator", generate_test_data_node)
     workflow.add_node("executor", execute_code_node)
     
     # 如果启用自动保存,添加保存节点
@@ -54,7 +56,8 @@ def create_workflow(max_retries: int = 3, auto_save: bool = True) -> StateGraph:
     
     # 添加边
     workflow.add_edge("parser", "generator")
-    workflow.add_edge("generator", "executor")
+    workflow.add_edge("generator", "test_data_generator")
+    workflow.add_edge("test_data_generator", "executor")
     
     # 添加条件边(Reflector 决定是重试还是结束)
     if auto_save:

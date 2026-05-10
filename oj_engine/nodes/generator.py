@@ -42,17 +42,17 @@ def generate_code_node(state: GraphState) -> GraphState:
 2. **数据生成器(generator)**: Python 脚本,用于生成符合题目要求的测试数据
 
 要求:
-- 标答代码使用 Python
+- 标答代码可以使用 C++ 或 Python
 - 数据生成器必须使用 Python,利用 random 模块
 - 数据生成器应该能生成各种边界情况和极端情况
 - 代码必须完整可运行,不要省略任何部分
-- 如果需要特殊判题器(SPJ),也请生成 checker.py
+- 如果需要特殊判题器(SPJ),也请生成 checker.cpp
 
 请以 JSON 格式返回:
 ```json
 {{
   "solution_code": "...",
-  "solution_language": "python",
+  "solution_language": "cpp" 或 "python",
   "generator_code": "...",
   "checker_code": "..." (可选)
 }}
