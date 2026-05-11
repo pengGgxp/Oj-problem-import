@@ -6,8 +6,49 @@
 2. 环境变量（回退）：从 .env 文件或系统环境变量加载
 """
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Optional
+from typing import Optional, Dict, Any
 import os
+
+
+def _load_user_config_to_env() -> None:
+    """
+    从用户配置文件加载配置并设置到环境变量
+    
+    这是一个独立的函数，负责将用户配置转换为环境变量，
+    这样 Settings 类就不需要直接依赖 config_manager
+    """
+    try:
+        from ..config_manager import load_config
+        user_config = load_config()
+        
+        if not user_config or 'llm' not in user_config:
+            return
+        
+        llm_config = user_config['llm']
+        
+        # 提取配置值
+        api_key = llm_config.get('api_key', '')
+        model = llm_config.get('model')
+        temperature = llm_config.get('temperature')
+        base_url = llm_config.get('base_url')
+        
+        # 设置环境变量（优先级高于 .env 文件）
+        if api_key:
+            os.environ.setdefault('LLM_OPENAI_API_KEY', api_key)
+            os.environ.setdefault('OPENAI_API_KEY', api_key)
+        
+        if model:
+            os.environ.setdefault('LLM_MODEL', model)
+        
+        if temperature is not None:
+            os.environ.setdefault('LLM_TEMPERATURE', str(temperature))
+        
+        if base_url:
+            os.environ.setdefault('LLM_OPENAI_BASE_URL', base_url)
+            os.environ.setdefault('OPENAI_BASE_URL', base_url)
+    except Exception:
+        # 如果加载失败，静默忽略，使用默认配置
+        pass
 
 
 class LLMSettings(BaseSettings):
@@ -66,50 +107,17 @@ class WorkflowSettings(BaseSettings):
     )
 
 
+# 在模块加载时，先从用户配置加载到环境变量
+_load_user_config_to_env()
+
+
 class Settings(BaseSettings):
     """
     全局配置类
     
     整合所有子配置,提供统一的配置访问接口
-    优先从用户配置加载，如果没有则使用环境变量
+    配置优先级：用户配置 > 环境变量 > .env 文件 > 默认值
     """
-    
-    def __init__(self, **kwargs):
-        # 尝试从用户配置加载
-        try:
-            from ..config_manager import load_config
-            user_config = load_config()
-            
-            if user_config and 'llm' in user_config:
-                llm_config = user_config['llm']
-                
-                # 将用户配置转换为环境变量格式
-                provider = llm_config.get('provider', 'openai')
-                api_key = llm_config.get('api_key', '')
-                model = llm_config.get('model', 'gpt-4')
-                temperature = llm_config.get('temperature', 0.2)
-                base_url = llm_config.get('base_url')
-                
-                # 设置 API Key 和模型
-                if api_key:
-                    kwargs.setdefault('llm_openai_api_key', api_key)
-                    # 同时设置环境变量，供 LangChain 使用
-                    os.environ['OPENAI_API_KEY'] = api_key
-                
-                if model:
-                    kwargs.setdefault('llm_model', model)
-                
-                if temperature:
-                    kwargs.setdefault('llm_temperature', temperature)
-                
-                if base_url:
-                    kwargs.setdefault('llm_openai_base_url', base_url)
-                    os.environ['OPENAI_BASE_URL'] = base_url
-        except Exception as e:
-            # 如果加载用户配置失败，静默回退到环境变量
-            pass
-        
-        super().__init__(**kwargs)
     
     llm: LLMSettings = LLMSettings()
     docker: DockerSettings = DockerSettings()

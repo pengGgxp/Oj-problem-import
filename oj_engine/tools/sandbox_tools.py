@@ -511,10 +511,10 @@ def save_outputs_to_host(problem_title: str = "unnamed") -> dict:
         if getattr(sys, 'frozen', False):
             # 打包成 exe 的情况：使用当前工作目录
             project_root = Path.cwd()
-            
         else:
-            # Python 脚本运行的情况：获取项目根目录
-            project_root = Path(__file__).parent.parent.parent  # oj_engine/tools -> oj_engine -> project root
+            # Python 脚本运行或 uvx 运行的情况：使用当前工作目录
+            # 这样无论是本地开发还是通过 uvx 运行，都能正确找到 outputs 目录
+            project_root = Path.cwd()
         print(f"[save_outputs_to_host] Project root: {project_root}")
         output_base = project_root / "outputs"
         output_base.mkdir(parents=True, exist_ok=True)
