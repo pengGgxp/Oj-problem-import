@@ -15,6 +15,7 @@ from ..sandbox import SandboxExecutor, SandboxSession
 from ..config import settings
 import json
 import shutil
+import sys
 from pathlib import Path
 from datetime import datetime
 
@@ -506,7 +507,14 @@ def save_outputs_to_host(problem_title: str = "unnamed") -> dict:
     
     try:
         # 创建输出目录
-        project_root = Path(__file__).parent.parent.parent  # oj_engine/tools -> oj_engine -> project root
+        # 获取程序运行目录（支持 exe 和 Python 脚本）
+        if getattr(sys, 'frozen', False):
+            # 打包成 exe 的情况：获取 exe 所在目录
+            project_root = Path(sys.executable).parent
+        else:
+            # Python 脚本运行的情况：获取项目根目录
+            project_root = Path(__file__).parent.parent.parent  # oj_engine/tools -> oj_engine -> project root
+        
         output_base = project_root / "outputs"
         output_base.mkdir(parents=True, exist_ok=True)
         
