@@ -11,6 +11,7 @@ wheels/
 
 # Environment variables
 .env
+.pypirc
 **/outputs/**
 
 # Nuitka build files

@@ -3,7 +3,22 @@ name = "oj-problem-import"
 version = "0.1.0"
 description = "AI OJ Content Engine - 智能 OJ 题目生成引擎"
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.12"
+authors = [
+    {name = "str1ct", email = "str1ct@qq.com"},
+]
+maintainers = [
+    {name = "str1ct", email = "str1ct@qq.com"},
+]
+keywords = ["oj", "problem", "import", "ai", "langchain"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "langgraph>=0.2.0",
     "langchain>=0.3.0",
@@ -20,8 +35,18 @@ dependencies = [
     "questionary>=2.0.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/pengGgxp/Oj-problem-import"
+Documentation = "https://github.com/pengGgxp/Oj-problem-import#readme"
+Repository = "https://github.com/pengGgxp/Oj-problem-import"
+"Bug Tracker" = "https://github.com/pengGgxp/Oj-problem-import/issues"
+
 [project.scripts]
 oj-engine = "oj_engine.cli:main"
 
 [tool.uv]
 package = true
+
+[tool.setuptools.packages.find]
+include = ["oj_engine*"]
+exclude = ["outputs*", "dist*", "docs*", "examples*"]

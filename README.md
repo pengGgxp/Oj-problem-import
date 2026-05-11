@@ -2,6 +2,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![PyPI version](https://badge.fury.io/py/oj-problem-import.svg)](https://pypi.org/project/oj-problem-import/)
 
 一个基于 LangGraph ReAct Agent 的智能 OJ（Online Judge）题目内容生成系统，能够自主决策并生成完整的测试数据包。
 
@@ -23,6 +24,26 @@
 - OpenAI API Key（或其他 LLM API）
 
 ### 安装
+
+#### 方式一：使用 uvx（推荐，无需安装）
+
+```bash
+# 直接运行，uvx 会自动下载并执行
+uvx oj-problem-import configure
+uvx oj-problem-import generate -f problem.txt
+```
+
+#### 方式二：从 PyPI 安装
+
+```bash
+# 使用 uv 安装
+uv pip install oj-problem-import
+
+# 或使用 pip
+pip install oj-problem-import
+```
+
+#### 方式三：从源码安装
 
 ```bash
 # 克隆项目

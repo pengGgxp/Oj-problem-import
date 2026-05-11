@@ -1,0 +1,41 @@
+name: Publish to PyPI
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:  # 允许手动触发
+
+permissions:
+  id-token: write  # 必需：用于 OIDC 受信任发布
+  contents: read   # 必需：访问代码
+
+jobs:
+  publish:
+    name: Build and publish to PyPI
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        enable-cache: true
+        
+    - name: Build package
+      run: uv build
+      
+    - name: Verify distribution files
+      run: |
+        echo "Generated files:"
+        ls -lh dist/
+        
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      # 无需配置 token，使用 OIDC 自动认证
