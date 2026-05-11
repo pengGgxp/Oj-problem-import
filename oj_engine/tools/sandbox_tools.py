@@ -507,10 +507,9 @@ def save_outputs_to_host(problem_title: str = "unnamed") -> dict:
     
     try:
         # 创建输出目录
-        # 获取程序运行目录（支持 exe 和 Python 脚本）
+        # 获取程序运行目录
         if getattr(sys, 'frozen', False):
             # 打包成 exe 的情况：使用当前工作目录
-            # Nuitka onefile 模式下，sys.executable 指向临时文件，所以使用 cwd
             project_root = Path.cwd()
             
         else:
