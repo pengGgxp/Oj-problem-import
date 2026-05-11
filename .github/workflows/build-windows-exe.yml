@@ -64,12 +64,14 @@ jobs:
           --include-package=langchain_openai `
           --include-package=langchain_community `
           --include-package=langchain_classic `
+          --include-package=langchain_core `
           --include-package=docker `
           --include-package=pydantic `
           --include-package=pydantic_settings `
           --include-package=dotenv `
           --include-package=fastapi `
           --python-flag=no_site `
+          --jobs=4 `
           --assume-yes-for-downloads `
           --output-dir=dist `
           --output-filename=oj-engine.exe `

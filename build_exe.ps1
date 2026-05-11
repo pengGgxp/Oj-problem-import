@@ -11,10 +11,10 @@ Write-Host ""
 # 检查 Nuitka 是否安装
 Write-Host "[检查] 验证 Nuitka 安装..." -ForegroundColor Yellow
 try {
-    $nuitkaVersion = & nuitka --version 2>&1
+    $nuitkaVersion = & uv run nuitka --version 2>&1
     Write-Host "✓ Nuitka 已安装: $nuitkaVersion" -ForegroundColor Green
 } catch {
-    Write-Host "[错误] Nuitka 未安装，请先运行: pip install nuitka" -ForegroundColor Red
+    Write-Host "[错误] Nuitka 未安装，请先运行: uv pip install nuitka" -ForegroundColor Red
     Read-Host "按回车键退出"
     exit 1
 }
@@ -49,12 +49,14 @@ $nuitkaArgs = @(
     "--include-package=langchain_openai",
     "--include-package=langchain_community",
     "--include-package=langchain_classic",
+    "--include-package=langchain_core",
     "--include-package=docker",
     "--include-package=pydantic",
     "--include-package=pydantic_settings",
     "--include-package=dotenv",
     "--include-package=fastapi",
     "--python-flag=no_site",
+    "--jobs=4",
     "--assume-yes-for-downloads",
     "--output-dir=dist",
     "--output-filename=oj-engine.exe",
@@ -62,7 +64,7 @@ $nuitkaArgs = @(
 )
 
 try {
-    & nuitka $nuitkaArgs
+    & uv run nuitka $nuitkaArgs
     if ($LASTEXITCODE -ne 0) {
         throw "Nuitka 编译失败"
     }

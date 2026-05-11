@@ -8,7 +8,7 @@ echo.
 REM 检查 Nuitka 是否安装
 where nuitka >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [错误] Nuitka 未安装，请先运行: pip install nuitka
+    echo [错误] Nuitka 未安装，请先运行: uv pip install nuitka
     pause
     exit /b 1
 )
@@ -25,7 +25,7 @@ echo.
 echo [2/4] 开始编译（这可能需要几分钟）...
 echo.
 
-nuitka --standalone ^
+uv run nuitka --standalone ^
     --onefile ^
     --include-package=oj_engine ^
     --include-package=click ^
@@ -36,12 +36,14 @@ nuitka --standalone ^
     --include-package=langchain_openai ^
     --include-package=langchain_community ^
     --include-package=langchain_classic ^
+    --include-package=langchain_core ^
     --include-package=docker ^
     --include-package=pydantic ^
     --include-package=pydantic_settings ^
     --include-package=dotenv ^
     --include-package=fastapi ^
     --python-flag=no_site ^
+    --jobs=4 ^
     --assume-yes-for-downloads ^
     --output-dir=dist ^
     --output-filename=oj-engine.exe ^
