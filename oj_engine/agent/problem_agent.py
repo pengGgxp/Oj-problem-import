@@ -267,20 +267,41 @@ class ProblemGenerationAgent:
         self.sandbox_session.cleanup()
         print("[Agent] Agent closed and resources cleaned up")
     
-    def generate_problem(self, problem_description: str) -> dict:
+    def generate_problem(self, problem_description: str, base_path: str = "") -> dict:
         """
         主入口:根据题目描述生成完整产物
         
         Args:
             problem_description: 题目描述文本
+            base_path: 基础路径（可选），用于保持目录结构。例如 "problems/easy"
             
         Returns:
             dict 包含 Agent 执行的完整结果
         """
         print("\n[Agent] Starting problem generation...")
         print(f"  Problem: {problem_description[:100]}...")
+        if base_path:
+            print(f"  Base path: {base_path}")
         
         # 构建完整的消息 (系统提示 + 任务指令)
+        base_path_instruction = ""
+        if base_path:
+            base_path_instruction = f"""
+**重要**: 调用 save_outputs_to_host 时，请使用 base_path 参数来保持目录结构：
+```python
+save_outputs_to_host(problem_title="{problem_description.split(chr(10))[0][:50]}", base_path="{base_path}")
+```
+这会将输出保存到: outputs/{base_path}/{{timestamp}}_{{title}}/
+"""
+        else:
+            base_path_instruction = """
+**重要**: 调用 save_outputs_to_host 时，**不要使用** base_path 参数，直接保存即可：
+```python
+save_outputs_to_host(problem_title="题目名称")
+```
+这会将输出保存到: outputs/{{timestamp}}_{{title}}/
+"""
+        
         full_prompt = f"""{REACT_SYSTEM_PROMPT}
 
 ---
@@ -306,7 +327,7 @@ class ProblemGenerationAgent:
 - solution 和 generator 都必须是有效的 Python 代码
 - **最终沙箱中只能有**: solution.py, generator.py, tests/ 目录
 - **必须删除所有临时文件**后再调用 save_outputs_to_host
-
+{base_path_instruction}
 请逐步思考并执行,确保最终产物完整可用。
 
 最后,请以 JSON 格式总结你的工作成果:
@@ -333,13 +354,15 @@ class ProblemGenerationAgent:
             raise
     
     def generate_problem_with_retry(self, problem_description: str, 
-                                     max_retries: int = 2) -> dict:
+                                     max_retries: int = 2,
+                                     base_path: str = "") -> dict:
         """
         带重试机制的问题生成
         
         Args:
             problem_description: 题目描述
             max_retries: 最大重试次数
+            base_path: 基础路径（可选），用于保持目录结构
             
         Returns:
             Agent 执行结果
@@ -349,7 +372,7 @@ class ProblemGenerationAgent:
         for attempt in range(1, max_retries + 1):
             try:
                 print(f"\n[Agent] Attempt {attempt}/{max_retries}")
-                result = self.generate_problem(problem_description)
+                result = self.generate_problem(problem_description, base_path)
                 
                 # 检查结果是否包含必要信息
                 if "output" in result:

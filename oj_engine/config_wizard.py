@@ -22,7 +22,7 @@ def run_config_wizard() -> bool:
         如果配置成功则返回 True，否则返回 False
     """
     print("\n" + "=" * 60)
-    print("欢迎使用 OJ Engine 配置向导")
+    print("欢迎使用 oj problem import 配置向导")
     print("=" * 60)
     print("\n这将引导你完成初始配置\n")
     

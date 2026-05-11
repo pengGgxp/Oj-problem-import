@@ -21,3 +21,4 @@ wheels/
 *.so
 *.dll
 *.dylib
+题库/

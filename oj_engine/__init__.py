@@ -1,5 +1,5 @@
 """
-OJ Engine - AI OJ Content Engine
+oj problem import - AI OJ Content Engine
 
 采用 ReAct Agent 架构,让 AI 自主决策执行流程。
 """
@@ -19,6 +19,12 @@ from .tools import (
 from .sandbox import SandboxExecutor
 from .config import Settings, settings, get_settings
 
+# 多任务处理
+from .task_models import TaskItem, TaskBatch, TaskStatus
+from .task_worker import TaskWorker
+from .task_scheduler import TaskScheduler
+from .file_scanner import FileScanner
+
 __all__ = [
     # Agent
     "ProblemGenerationAgent",
@@ -37,4 +43,12 @@ __all__ = [
     "Settings",
     "settings",
     "get_settings",
+    
+    # Multi-task Processing
+    "TaskItem",
+    "TaskBatch",
+    "TaskStatus",
+    "TaskWorker",
+    "TaskScheduler",
+    "FileScanner",
 ]

@@ -38,7 +38,7 @@ async def run_example():
     """
     
     print("=" * 60)
-    print("OJ Engine - AI OJ Content Engine")
+    print("oj problem import - AI OJ Content Engine")
     print("=" * 60)
     print(f"\n题目描述:\n{problem_description}\n")
     

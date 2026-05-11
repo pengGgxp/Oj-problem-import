@@ -1,8 +1,8 @@
-# OJ Engine CLI 使用指南
+# oj problem import CLI 使用指南
 
 ## 概述
 
-OJ Engine 提供了便捷的命令行工具，可以通过终端命令直接生成 OJ 题目测试数据包。
+oj problem import 提供了便捷的命令行工具，可以通过终端命令直接生成 OJ 题目测试数据包。
 
 ## 安装
 

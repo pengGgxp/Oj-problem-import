@@ -476,14 +476,15 @@ def delete_file(filename: str) -> dict:
 
 
 @tool
-def save_outputs_to_host(problem_title: str = "unnamed") -> dict:
+def save_outputs_to_host(problem_title: str = "unnamed", base_path: str = "") -> dict:
     """
     将沙箱工作目录中的产物复制到主机的 outputs 目录。
     
-    从沙箱的 /workspace 目录复制所有文件到项目的 outputs/{timestamp}_{title} 目录。
+    从沙箱的 /workspace 目录复制所有文件到项目的 outputs/{base_path}/{timestamp}_{title} 目录。
     
     Args:
         problem_title: 题目标题，用于命名输出目录
+        base_path: 基础路径（可选），用于保持原始目录结构。例如 "problems/easy"
         
     Returns:
         dict 包含:
@@ -492,8 +493,13 @@ def save_outputs_to_host(problem_title: str = "unnamed") -> dict:
         - files_copied: 复制的文件列表
         
     Example:
+        >>> # 基本用法
         >>> save_outputs_to_host("A+B Problem")
         {'success': True, 'output_path': 'outputs/20260510_123456_A_B_Problem', ...}
+        
+        >>> # 保持目录结构
+        >>> save_outputs_to_host("A+B Problem", base_path="problems/easy")
+        {'success': True, 'output_path': 'outputs/problems/easy/20260510_123456_A_B_Problem', ...}
     """
     session = get_sandbox_session()
     
@@ -522,7 +528,17 @@ def save_outputs_to_host(problem_title: str = "unnamed") -> dict:
         # 生成带时间戳的目录名
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_title = _sanitize_filename(problem_title)
-        output_path = output_base / f"{timestamp}_{safe_title}"
+        
+        # 如果提供了 base_path，则保持目录结构
+        if base_path and base_path.strip():
+            # 清理 base_path，移除前导/尾随斜杠和分隔符
+            clean_base = base_path.strip().strip('/').strip('\\')
+            # 将 Windows 风格路径转换为统一格式
+            clean_base = clean_path_separators(clean_base)
+            output_path = output_base / clean_base / f"{timestamp}_{safe_title}"
+        else:
+            output_path = output_base / f"{timestamp}_{safe_title}"
+        
         output_path.mkdir(parents=True, exist_ok=True)
         
         # 复制沙箱工作目录的所有内容
@@ -581,5 +597,28 @@ def _sanitize_filename(filename: str) -> str:
         filename = filename[:50]
     
     return filename.strip()
+
+
+def clean_path_separators(path: str) -> str:
+    """
+    清理路径分隔符，统一为正斜杠
+    
+    Args:
+        path: 原始路径字符串
+        
+    Returns:
+        清理后的路径（使用正斜杠）
+    """
+    # 将反斜杠转换为正斜杠
+    path = path.replace('\\', '/')
+    
+    # 移除连续的斜杠
+    while '//' in path:
+        path = path.replace('//', '/')
+    
+    # 移除前导和尾随斜杠
+    path = path.strip('/')
+    
+    return path
 
 

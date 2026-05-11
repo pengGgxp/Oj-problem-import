@@ -40,7 +40,7 @@ def main():
 """
     
     print("=" * 80)
-    print("OJ Engine - Agent Mode")
+    print("oj problem import - Agent Mode")
     print("=" * 80)
     print(f"\nProblem: A + B Problem")
     print("-" * 80)

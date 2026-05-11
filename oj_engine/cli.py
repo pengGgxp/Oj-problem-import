@@ -1,5 +1,5 @@
 """
-OJ Engine CLI - 命令行工具
+oj problem import CLI - 命令行工具
 
 提供便捷的命令行接口来生成 OJ 题目测试数据包。
 """
@@ -13,7 +13,7 @@ from oj_engine.config_wizard import run_config_wizard
 
 @click.group()
 def main():
-    """OJ Engine - AI OJ 题目生成工具
+    """oj problem import - AI OJ 题目生成工具
     
     使用 AI 自动生成 OJ 题目的完整测试数据包，包括标答代码、
     数据生成器和多组测试数据。
@@ -82,7 +82,7 @@ def generate(file_path, description, max_iterations, output_dir):
     
     # 显示配置信息
     click.echo("\n" + "=" * 80)
-    click.echo("OJ Engine - 题目生成")
+    click.echo("oj problem import - 题目生成")
     click.echo("=" * 80)
     click.echo(f"\n配置:")
     click.echo(f"  - 最大迭代次数: {max_iterations}")
@@ -143,7 +143,7 @@ def generate(file_path, description, max_iterations, output_dir):
 
 @main.command()
 def configure():
-    """重新配置 OJ Engine"""
+    """重新配置 oj problem import"""
     click.echo("启动配置向导...")
     success = run_config_wizard()
     if not success:
@@ -164,6 +164,133 @@ def show_config():
         click.echo(f"  配置文件: {get_config_path()}")
     else:
         click.echo("未配置，请运行 'oj-problem-import configure'")
+
+
+@main.command()
+@click.argument('inputs', nargs=-1, required=True)
+@click.option('--max-workers', '-w', default=4, type=int,
+              help='最大并行工作进程数（默认: 4）')
+@click.option('--max-iterations', '-m', default=20, type=int,
+              help='每个任务的最大迭代次数（默认: 20）')
+@click.option('--max-retries', '-r', default=2, type=int,
+              help='每个任务的最大重试次数（默认: 2）')
+@click.option('--output-dir', '-o', default='outputs', type=str,
+              help='输出目录（默认: outputs）')
+def batch(inputs, max_workers, max_iterations, max_retries, output_dir):
+    """批量生成多个 OJ 题目
+    
+    支持单个文件、多个文件或目录。
+    
+    示例:
+        # 单个文件
+        oj-problem-import batch problem1.txt
+        
+        # 多个文件
+        oj-problem-import batch problem1.txt problem2.txt problem3.txt
+        
+        # 目录（自动扫描所有 .txt/.md 文件）
+        oj-problem-import batch ./problems/
+        
+        # 自定义参数
+        oj-problem-import batch ./problems/ -w 8 -r 3
+    """
+    from .file_scanner import FileScanner
+    from .task_scheduler import TaskScheduler
+    from .task_models import TaskItem, TaskStatus
+    import uuid
+    
+    # 检查配置
+    if not is_configured():
+        click.echo("\n⚠ 检测到未配置，启动配置向导...\n")
+        success = run_config_wizard()
+        if not success:
+            click.echo("\n✗ 配置失败，无法继续执行", err=True)
+            sys.exit(1)
+        click.echo("\n配置完成！继续执行任务...\n")
+    
+    # 扫描所有输入
+    all_files = []
+    input_to_files = {}  # 记录每个输入路径对应的文件列表
+    
+    for input_path in inputs:
+        try:
+            files = FileScanner.scan_input(input_path)
+            all_files.extend(files)
+            input_to_files[input_path] = files
+            click.echo(f"✓ 扫描到 {len(files)} 个文件: {input_path}")
+        except Exception as e:
+            click.echo(f"✗ 扫描失败 {input_path}: {e}", err=True)
+    
+    if not all_files:
+        click.echo("错误: 未找到任何题目文件", err=True)
+        sys.exit(1)
+    
+    click.echo(f"\n共发现 {len(all_files)} 个题目文件")
+    click.echo(f"并行工作进程: {max_workers}")
+    click.echo(f"最大重试次数: {max_retries}")
+    click.echo("-" * 80)
+    
+    # 创建任务列表，计算 base_path
+    tasks = []
+    for input_path_str in inputs:
+        input_path = Path(input_path_str).resolve()  # 使用绝对路径
+        files = input_to_files.get(input_path_str, [])
+        
+        for file_path in files:
+            file_path_resolved = file_path.resolve()  # 也使用绝对路径
+            
+            # 计算 base_path：文件相对于输入路径的父目录
+            if input_path.is_file():
+                # 单个文件，base_path 为空
+                base_path = ""
+            elif input_path.is_dir():
+                # 目录模式，计算相对路径
+                try:
+                    rel_path = file_path_resolved.relative_to(input_path)
+                    # 取父目录作为 base_path
+                    if rel_path.parent != Path('.'):
+                        base_path = str(rel_path.parent)
+                    else:
+                        base_path = ""
+                except ValueError:
+                    # 如果无法计算相对路径，使用空字符串
+                    base_path = ""
+            else:
+                base_path = ""
+            
+            tasks.append(
+                TaskItem(
+                    task_id=str(uuid.uuid4())[:8],
+                    file_path=file_path,
+                    problem_title=file_path.stem,
+                    base_path=base_path
+                )
+            )
+    
+    # 执行任务
+    try:
+        scheduler = TaskScheduler(
+            max_workers=max_workers,
+            max_retries=max_retries
+        )
+        
+        results = scheduler.run_batch(tasks)
+        
+        # 显示详细报告
+        scheduler.print_detailed_report()
+        
+        # 获取摘要
+        summary = scheduler.get_summary()
+        
+        # 如果有失败任务，退出码为 1
+        if summary['failed'] > 0:
+            sys.exit(1)
+        
+    except Exception as e:
+        click.echo(f"\n✗ 调度器错误: {str(e)}", err=True)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
 
 if __name__ == "__main__":

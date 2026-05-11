@@ -14,6 +14,7 @@
 - 📊 **智能测试**：自动生成小/中/大规模测试数据，确保数据强度分布合理
 - 🛠️ **分层工具**：提供基础、专用、高级三层工具供 Agent 调用
 - 💾 **产物管理**：自动收集和保存生成的代码、测试数据等产物
+- ⚡ **批量处理**：支持多文件/目录批量处理，多进程并行执行，失败隔离
 
 ## 🚀 快速开始
 
@@ -105,6 +106,30 @@ oj-problem-import generate -d "A+B Problem..."
 # 自定义参数
 oj-problem-import generate -f problem.txt -m 30 -o ./results
 ```
+
+#### 批量处理（新功能）
+
+```bash
+# 单个文件
+oj-problem-import batch problem1.txt
+
+# 多个文件
+oj-problem-import batch problem1.txt problem2.txt problem3.txt
+
+# 目录（自动扫描所有 .txt/.md 文件）
+oj-problem-import batch ./problems/
+
+# 自定义参数
+oj-problem-import batch ./problems/ -w 4 -r 2 -m 30
+```
+
+**批量处理特性**：
+- ⚡ 多进程并行执行，提升效率
+- 🛡️ 失败隔离，单个任务失败不影响其他任务
+- 🔄 自动重试机制，提高成功率
+- 📊 详细执行报告，清晰展示结果
+
+详见 [BATCH_USAGE.md](BATCH_USAGE.md)
 
 #### 方式二：Python API
 
