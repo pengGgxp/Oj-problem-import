@@ -509,8 +509,10 @@ def save_outputs_to_host(problem_title: str = "unnamed") -> dict:
         # 创建输出目录
         # 获取程序运行目录（支持 exe 和 Python 脚本）
         if getattr(sys, 'frozen', False):
-            # 打包成 exe 的情况：获取 exe 所在目录
-            project_root = Path(sys.executable).parent
+            # 打包成 exe 的情况：使用 sys._MEIPASS (PyInstaller) 或当前工作目录
+            # Nuitka onefile 模式下，使用 os.getcwd() 获取 exe 运行目录
+            import os
+            project_root = Path(os.getcwd())
         else:
             # Python 脚本运行的情况：获取项目根目录
             project_root = Path(__file__).parent.parent.parent  # oj_engine/tools -> oj_engine -> project root
