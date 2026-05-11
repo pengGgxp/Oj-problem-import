@@ -216,7 +216,7 @@ class ProblemGenerationAgent:
             max_iterations: 最大迭代次数,防止无限循环
         """
         # 获取 LLM 客户端
-        self.llm = settings.get_llm_client(model_type="generator")
+        self.llm = settings.get_llm_client()
         
         # 创建持久化沙箱会话
         self.sandbox_session = SandboxSession()

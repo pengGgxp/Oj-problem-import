@@ -25,10 +25,10 @@ cp .env.example .env
 
 ```bash
 # 查看主命令帮助
-uv run oj-engine --help
+uv run oj-problem-import --help
 
 # 查看 generate 子命令帮助
-uv run oj-engine generate --help
+uv run oj-problem-import generate --help
 ```
 
 ### 生成题目
@@ -61,13 +61,13 @@ A + B Problem
 然后运行：
 
 ```bash
-uv run oj-engine generate -f problem.txt
+uv run oj-problem-import generate -f problem.txt
 ```
 
 #### 方式二：直接在命令行传入题目描述
 
 ```bash
-uv run oj-engine generate -d "A+B Problem. Calculate the sum of two integers."
+uv run oj-problem-import generate -d "A+B Problem. Calculate the sum of two integers."
 ```
 
 注意：对于较长的题目描述，建议使用文件方式。
@@ -76,13 +76,13 @@ uv run oj-engine generate -d "A+B Problem. Calculate the sum of two integers."
 
 ```bash
 # 设置最大迭代次数为 30
-uv run oj-engine generate -f problem.txt -m 30
+uv run oj-problem-import generate -f problem.txt -m 30
 
 # 指定输出目录
-uv run oj-engine generate -f problem.txt -o ./my_outputs
+uv run oj-problem-import generate -f problem.txt -o ./my_outputs
 
 # 组合使用
-uv run oj-engine generate -f problem.txt -m 30 -o ./results
+uv run oj-problem-import generate -f problem.txt -m 30 -o ./results
 ```
 
 ## 命令参数说明
@@ -148,14 +148,14 @@ echo "A + B Problem
 8" > ab_problem.txt
 
 # 生成题目
-uv run oj-engine generate -f ab_problem.txt
+uv run oj-problem-import generate -f ab_problem.txt
 ```
 
 ### 示例 2：复杂算法题
 
 ```bash
 # 使用更长的迭代次数处理复杂题目
-uv run oj-engine generate -f lis_problem.txt -m 40
+uv run oj-problem-import generate -f lis_problem.txt -m 40
 ```
 
 ### 示例 3：批量生成
@@ -163,7 +163,7 @@ uv run oj-engine generate -f lis_problem.txt -m 40
 ```bash
 # 编写脚本批量处理
 for file in problems/*.txt; do
-    uv run oj-engine generate -f "$file" -o ./batch_outputs
+    uv run oj-problem-import generate -f "$file" -o ./batch_outputs
 done
 ```
 
@@ -180,7 +180,7 @@ pip install -e .
 然后直接使用：
 
 ```bash
-oj-engine generate -f problem.txt
+oj-problem-import generate -f problem.txt
 ```
 
 ### Q: 如何查看生成的产物？
@@ -218,10 +218,10 @@ Remove-Item outputs\* -Recurse
 ```bash
 # 使用 curl 从网络获取题目描述并生成
 curl -s https://example.com/problem.txt | \
-    uv run oj-engine generate -d "$(cat)"
+    uv run oj-problem-import generate -d "$(cat)"
 
 # 将生成的产物打包
-uv run oj-engine generate -f problem.txt
+uv run oj-problem-import generate -f problem.txt
 tar -czf output.tar.gz outputs/latest/
 ```
 
@@ -229,11 +229,11 @@ tar -czf output.tar.gz outputs/latest/
 
 ```bash
 # 按项目组织输出
-uv run oj-engine generate -f problem.txt -o ./projects/sorting_algorithms
+uv run oj-problem-import generate -f problem.txt -o ./projects/sorting_algorithms
 
 # 按日期组织输出
 DATE=$(date +%Y%m%d)
-uv run oj-engine generate -f problem.txt -o ./outputs/$DATE
+uv run oj-problem-import generate -f problem.txt -o ./outputs/$DATE
 ```
 
 ## 技术支持

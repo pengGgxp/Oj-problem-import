@@ -40,13 +40,13 @@ def generate(file_path, description, max_iterations, output_dir):
     
     示例:
         # 从文件读取题目描述
-        oj-engine generate -f problem.txt
+        oj-problem-import generate -f problem.txt
         
         # 直接传入题目描述
-        oj-engine generate -d "A+B Problem..."
+        oj-problem-import generate -d "A+B Problem..."
         
         # 自定义参数
-        oj-engine generate -f problem.txt -m 30 -o ./results
+        oj-problem-import generate -f problem.txt -m 30 -o ./results
     """
     # 检查配置
     if not is_configured():
@@ -60,7 +60,7 @@ def generate(file_path, description, max_iterations, output_dir):
     # 验证参数
     if not file_path and not description:
         click.echo("错误: 必须提供 --file 或 --description 参数", err=True)
-        click.echo("使用 'oj-engine generate --help' 查看帮助", err=True)
+        click.echo("使用 'oj-problem-import generate --help' 查看帮助", err=True)
         sys.exit(1)
     
     # 读取题目描述
@@ -163,7 +163,7 @@ def show_config():
             click.echo(f"  Base URL: {config['llm']['base_url']}")
         click.echo(f"  配置文件: {get_config_path()}")
     else:
-        click.echo("未配置，请运行 'oj-engine configure'")
+        click.echo("未配置，请运行 'oj-problem-import configure'")
 
 
 if __name__ == "__main__":

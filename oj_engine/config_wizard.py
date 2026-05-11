@@ -164,7 +164,7 @@ def run_config_wizard() -> bool:
         if save_config(config):
             print("\n✓ 配置已保存!")
             print(f"  配置文件: {get_config_path()}")
-            print("\n提示: 如需重新配置，请运行 'oj-engine configure'\n")
+            print("\n提示: 如需重新配置，请运行 'oj-problem-import configure'\n")
             return True
         else:
             print("\n✗ 配置保存失败")

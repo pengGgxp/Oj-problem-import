@@ -305,5 +305,5 @@ print(result['test_cases'])
 uv run python test_config.py
 
 # 查看当前配置值
-uv run python -c "from oj_engine import settings; print(settings.llm.parser_model)"
+uv run python -c "from oj_engine import settings; print(settings.llm.model)"
 ```

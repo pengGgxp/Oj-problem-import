@@ -23,7 +23,7 @@
 ### 4. 构建测试
 - [ ] 本地构建成功：`uv build`
 - [ ] 生成的包可以安装：`uv pip install dist/*.whl`
-- [ ] CLI 命令正常工作：`oj-engine --help`
+- [ ] CLI 命令正常工作：`oj-problem-import --help`
 
 ## 🚀 发布步骤
 
@@ -53,7 +53,7 @@ uvx oj-problem-import --help
 
 # 或从 PyPI 安装测试
 uv pip install oj-problem-import
-oj-engine --help
+oj-problem-import --help
 ```
 
 ## 🔍 发布后验证
@@ -67,7 +67,7 @@ oj-engine --help
 ```bash
 # 在新环境中测试
 uv pip install oj-problem-import
-oj-engine configure
+oj-problem-import configure
 ```
 
 ### 3. 测试 uvx

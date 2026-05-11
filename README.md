@@ -68,7 +68,7 @@ cp .env.example .env
 
 ```bash
 # 启动配置向导
-oj-engine configure
+oj-problem-import configure
 ```
 
 向导将引导你完成：
@@ -82,28 +82,28 @@ oj-engine configure
 **方式二：查看当前配置**
 
 ```bash
-oj-engine show-config
+oj-problem-import show-config
 ```
 
 #### 生成题目
 
 #### 方式一：命令行工具（推荐）
 
-安装依赖后，可以直接使用 `oj-engine` 命令：
+安装依赖后，可以直接使用 `oj-problem-import` 命令：
 
 ```bash
 # 查看帮助
-oj-engine --help
-oj-engine generate --help
+oj-problem-import --help
+oj-problem-import generate --help
 
 # 从文件读取题目描述
-oj-engine generate -f problem.txt
+oj-problem-import generate -f problem.txt
 
 # 直接传入题目描述
-oj-engine generate -d "A+B Problem..."
+oj-problem-import generate -d "A+B Problem..."
 
 # 自定义参数
-oj-engine generate -f problem.txt -m 30 -o ./results
+oj-problem-import generate -f problem.txt -m 30 -o ./results
 ```
 
 #### 方式二：Python API
@@ -136,7 +136,7 @@ with ProblemGenerationAgent(max_iterations=20) as agent:
 
 ```bash
 # 方式一：使用 CLI 命令（推荐）
-oj-engine generate -f problem.txt
+oj-problem-import generate -f problem.txt
 
 # 方式二：运行 Python 示例脚本
 python examples/agent_usage.py

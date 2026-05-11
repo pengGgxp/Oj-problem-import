@@ -252,7 +252,7 @@ uv run python test_quick.py
 
 # 查看详细日志
 export PYTHONPATH=.
-python -c "from oj_engine import settings; print(settings.llm.parser_model)"
+python -c "from oj_engine import settings; print(settings.llm.model)"
 ```
 
 ## ✨ 亮点总结

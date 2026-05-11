@@ -17,13 +17,11 @@ class LLMSettings(BaseSettings):
     openai_api_key: str = ""
     openai_base_url: Optional[str] = None  # 可选的自定义 base_url
     
-    # 模型配置
-    parser_model: str = "gpt-4"
-    generator_model: str = "gpt-4"
+    # 模型配置（统一使用一个模型）
+    model: str = "gpt-4"
     
     # 温度参数
-    parser_temperature: float = 0.1
-    generator_temperature: float = 0.2
+    temperature: float = 0.2
     
     model_config = SettingsConfigDict(
         env_prefix="LLM_",
@@ -88,7 +86,8 @@ class Settings(BaseSettings):
                 # 将用户配置转换为环境变量格式
                 provider = llm_config.get('provider', 'openai')
                 api_key = llm_config.get('api_key', '')
-                model = llm_config.get('model', 'gpt-3.5-turbo')
+                model = llm_config.get('model', 'gpt-4')
+                temperature = llm_config.get('temperature', 0.2)
                 base_url = llm_config.get('base_url')
                 
                 # 设置 API Key 和模型
@@ -98,8 +97,10 @@ class Settings(BaseSettings):
                     os.environ['OPENAI_API_KEY'] = api_key
                 
                 if model:
-                    kwargs.setdefault('llm_parser_model', model)
-                    kwargs.setdefault('llm_generator_model', model)
+                    kwargs.setdefault('llm_model', model)
+                
+                if temperature:
+                    kwargs.setdefault('llm_temperature', temperature)
                 
                 if base_url:
                     kwargs.setdefault('llm_openai_base_url', base_url)
@@ -120,24 +121,17 @@ class Settings(BaseSettings):
         extra="ignore"
     )
     
-    def get_llm_client(self, model_type: str = "parser"):
+    def get_llm_client(self):
         """
         获取配置好的 LLM 客户端
         
-        Args:
-            model_type: 模型类型 ("parser" 或 "generator")
-            
         Returns:
             ChatOpenAI 实例
         """
         from langchain_openai import ChatOpenAI
         
-        if model_type == "parser":
-            model_name = self.llm.parser_model
-            temperature = self.llm.parser_temperature
-        else:
-            model_name = self.llm.generator_model
-            temperature = self.llm.generator_temperature
+        model_name = self.llm.model
+        temperature = self.llm.temperature
         
         kwargs = {
             "model": model_name,

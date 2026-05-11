@@ -20,8 +20,8 @@ Settings (全局配置)
 ├── LLMSettings (LLM 配置)
 │   ├── openai_api_key
 │   ├── openai_base_url
-│   ├── parser_model / generator_model
-│   └── parser_temperature / generator_temperature
+│   ├── model (统一模型名称)
+│   └── temperature (统一温度参数)
 ├── DockerSettings (Docker 配置)
 │   ├── default_image
 │   ├── default_mem_limit
@@ -95,20 +95,21 @@ Settings (全局配置)
 ### 1. 类型安全
 ```python
 # Pydantic 自动验证类型
-settings.llm.parser_temperature  # float, 自动验证
+settings.llm.temperature  # float, 自动验证
 settings.workflow.max_retries    # int, 自动验证
 ```
 
 ### 2. 灵活配置
 ```python
 # 方式1: .env 文件
-LLM_PARSER_MODEL=gpt-4
+LLM_MODEL=gpt-4
+LLM_TEMPERATURE=0.2
 
 # 方式2: 环境变量
-export LLM_PARSER_MODEL=gpt-4
+export LLM_MODEL=gpt-4
 
 # 方式3: 代码中设置
-settings = Settings(llm={"parser_model": "gpt-4"})
+settings = Settings(llm={"model": "gpt-4"})
 ```
 
 ### 3. 集中管理
@@ -117,7 +118,8 @@ settings = Settings(llm={"parser_model": "gpt-4"})
 from oj_engine import settings
 
 # 访问任何配置
-settings.llm.parser_model
+settings.llm.model
+settings.llm.temperature
 settings.docker.default_image
 settings.workflow.max_retries
 ```
@@ -162,20 +164,21 @@ llm = ChatOpenAI(model="gpt-4", temperature=0.2)
 
 ### 改造后 (配置化)
 ```python
-# parser.py & generator.py
+# problem_agent.py
 from ..config import settings
-llm = settings.get_llm_client(model_type="parser")
+llm = settings.get_llm_client()
 
 # .env 文件
 LLM_OPENAI_API_KEY=sk-xxx
-LLM_PARSER_MODEL=gpt-4
-LLM_PARSER_TEMPERATURE=0.1
+LLM_MODEL=gpt-4
+LLM_TEMPERATURE=0.2
 
 # 优势:
 # ✅ 配置集中管理
 # ✅ 易于切换环境
 # ✅ 支持多种配置方式
 # ✅ 类型安全和验证
+# ✅ 统一的模型和温度配置
 ```
 
 ## 🔧 使用方法
@@ -200,8 +203,8 @@ from oj_engine.config import Settings
 custom_settings = Settings(
     llm={
         "openai_api_key": "sk-custom-key",
-        "parser_model": "gpt-3.5-turbo",
-        "generator_model": "gpt-3.5-turbo"
+        "model": "gpt-4",
+        "temperature": 0.2
     },
     workflow={
         "max_retries": 5
@@ -209,7 +212,7 @@ custom_settings = Settings(
 )
 
 # 使用自定义配置的 LLM
-llm = custom_settings.get_llm_client("parser")
+llm = custom_settings.get_llm_client()
 ```
 
 ### 动态修改
@@ -218,7 +221,8 @@ llm = custom_settings.get_llm_client("parser")
 import os
 
 # 临时覆盖配置
-os.environ["LLM_PARSER_MODEL"] = "gpt-3.5-turbo"
+os.environ["LLM_MODEL"] = "gpt-3.5-turbo"
+os.environ["LLM_TEMPERATURE"] = "0.3"
 
 # 重新加载配置 (需要重启应用或重新导入)
 from importlib import reload
@@ -228,8 +232,8 @@ reload(oj_engine.config.settings)
 
 ## ✨ 新增功能
 
-1. **模型分离**: Parser 和 Generator 可以使用不同的模型
-2. **温度可调**: 每个节点的温度参数可独立配置
+1. **统一模型配置**: 简化配置，使用单一模型名称
+2. **统一温度参数**: 所有任务使用相同的温度设置
 3. **自定义端点**: 支持通过 `LLM_OPENAI_BASE_URL` 使用自定义 API
 4. **Docker 配置化**: 所有 Docker 参数都可配置
 5. **工作流参数**: 重试次数等可通过配置调整

@@ -107,7 +107,7 @@ uvx oj-problem-import generate -f problem.txt
 uv pip install oj-problem-import
 
 # 使用
-oj-engine generate -f problem.txt
+oj-problem-import generate -f problem.txt
 ```
 
 ## 常见问题

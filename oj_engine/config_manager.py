@@ -12,8 +12,8 @@ import platformdirs
 
 
 # 应用名称
-APP_NAME = "oj-engine"
-APP_AUTHOR = "oj-engine"
+APP_NAME = "oj-problem-import"
+APP_AUTHOR = "oj-problem-import"
 CONFIG_FILENAME = "config.json"
 
 
@@ -171,7 +171,8 @@ def get_default_config() -> Dict[str, Any]:
         "llm": {
             "provider": "openai",
             "api_key": "",
-            "model": "gpt-3.5-turbo",
+            "model": "gpt-4",
+            "temperature": 0.2,
             "base_url": None
         },
         "sandbox": {
