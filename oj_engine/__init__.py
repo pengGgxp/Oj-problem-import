@@ -7,6 +7,7 @@ oj problem import - AI OJ Content Engine
 from .agent import ProblemGenerationAgent
 from .tools import (
     execute_code,
+    supported_sandbox_languages,
     write_code_file,
     read_file_content,
     edit_file_content,
@@ -31,6 +32,7 @@ __all__ = [
     
     # Tools
     "execute_code",
+    "supported_sandbox_languages",
     "write_code_file",
     "read_file_content",
     "edit_file_content",

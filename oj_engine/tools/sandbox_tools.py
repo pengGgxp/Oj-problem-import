@@ -2,7 +2,7 @@
 Sandbox Tools for Agent - 沙箱执行工具集
 
 提供基础工具供 ReAct Agent 调用:
-- execute_code: 在 Docker 沙箱中执行 Python 代码文件
+- execute_code: 根据语言在 Docker 沙箱中执行代码文件
 - write_code_file: 将代码写入沙箱工作目录的文件
 - read_file_content: 读取沙箱中的文件内容
 - edit_file_content: 编辑沙箱中的文件内容
@@ -11,9 +11,8 @@ Sandbox Tools for Agent - 沙箱执行工具集
 - save_outputs_to_host: 将沙箱中的产物复制到主机 outputs 目录
 """
 from langchain_core.tools import tool
-from ..sandbox import SandboxExecutor, SandboxSession
+from ..sandbox import SandboxSession, get_supported_languages
 from ..config import settings
-import json
 import shutil
 import sys
 from pathlib import Path
@@ -41,10 +40,19 @@ def get_sandbox_session() -> SandboxSession:
     Returns:
         SandboxSession 实例,如果没有则创建临时会话
     """
+    global _global_sandbox_session
+
     if _global_sandbox_session is not None:
         return _global_sandbox_session
     # 如果没有全局会话,创建一个临时的(向后兼容)
-    return SandboxSession()
+    _global_sandbox_session = SandboxSession(
+        image=settings.docker.default_image,
+        mem_limit=settings.docker.default_mem_limit,
+        cpu_quota=settings.docker.default_cpu_quota,
+        default_language=settings.docker.default_language,
+        language_images=settings.docker.language_images,
+    )
+    return _global_sandbox_session
 
 
 # ============================================================================
@@ -52,14 +60,30 @@ def get_sandbox_session() -> SandboxSession:
 # ============================================================================
 
 @tool
-def execute_code(code_file: str, input_file: str = "", timeout: int = 5) -> dict:
+def supported_sandbox_languages() -> dict:
     """
-    在 Docker 沙箱中执行 Python 代码文件并返回输出结果。
+    查看当前沙箱支持的标准语言名称。
+
+    Returns:
+        dict 包含 languages 列表。execute_code 的 language 参数应使用这些名称之一；
+        如果不传 language，会根据 code_file 的扩展名自动推断。
+    """
+    return {
+        "languages": get_supported_languages(),
+        "message": "Pass one of these names to execute_code(language=...), or omit it for extension-based inference."
+    }
+
+
+@tool
+def execute_code(code_file: str, input_file: str = "", timeout: int = 5, language: str = "") -> dict:
+    """
+    根据语言在 Docker 沙箱中执行代码文件并返回输出结果。
     
     Args:
-        code_file: 代码文件路径（相对于工作目录），如 "solution.py"
+        code_file: 代码文件路径（相对于工作目录），如 "solution.cpp", "solution.py"
         input_file: 输入文件路径（可选），如 "input.txt"
         timeout: 超时时间(秒),默认5秒
+        language: 代码语言（可选）。为空时根据扩展名推断。支持 python/cpp/c/java/javascript/go/rust。
         
     Returns:
         dict 包含:
@@ -68,25 +92,26 @@ def execute_code(code_file: str, input_file: str = "", timeout: int = 5) -> dict
         - exit_code: 退出码 (0表示成功)
         - execution_time: 执行时间(秒)
         - memory_usage: 内存使用(MB)
+        - language: 实际使用的语言
+        - image: 实际使用的 Docker 镜像
         - status: "success" 或 "error"
         
     Example:
         >>> # 先写入文件
-        >>> session.write_file("main.py", "print('hello')")
+        >>> session.write_file("main.cpp", "#include <bits/stdc++.h>\\nint main(){puts(\\"hello\\");}")
         >>> # 再执行
-        >>> execute_code("main.py")
-        {'stdout': 'hello\\n', 'stderr': '', 'exit_code': 0, ...}
+        >>> execute_code("main.cpp", language="cpp")
+        {'stdout': 'hello\\n', 'stderr': '', 'exit_code': 0, 'language': 'cpp', ...}
     """
     session = get_sandbox_session()
     
     try:
-        # 构建命令
-        cmd = f"python3 {code_file}"
-        if input_file:
-            cmd = f"{cmd} < {input_file}"
-        
-        # 执行命令
-        result = session.execute_command(cmd, timeout=timeout)
+        result = session.execute_code_file(
+            code_file=code_file,
+            input_file=input_file,
+            timeout=timeout,
+            language=language,
+        )
         
         # 获取资源使用情况(简化版)
         stats = session.container.stats(stream=False) if session.container else {}
@@ -111,7 +136,10 @@ def execute_code(code_file: str, input_file: str = "", timeout: int = 5) -> dict
             "exit_code": result["exit_code"],
             "execution_time": 0.0,  # TODO: 精确计时需要更复杂的实现
             "memory_usage": memory_usage,
-            "status": status
+            "status": status,
+            "language": result.get("language", language),
+            "image": result.get("image", ""),
+            "command": result.get("command", ""),
         }
         
     except Exception as e:
@@ -120,7 +148,10 @@ def execute_code(code_file: str, input_file: str = "", timeout: int = 5) -> dict
             "stderr": str(e),
             "exit_code": -1,
             "execution_time": 0,
-            "memory_usage": 0
+            "memory_usage": 0,
+            "language": language,
+            "image": "",
+            "command": "",
         }
 
 
@@ -432,7 +463,7 @@ def delete_file(filename: str) -> dict:
     """
     session = get_sandbox_session()
     
-    if not session._initialized or not session.work_dir:
+    if not session.work_dir:
         return {
             "success": False,
             "message": "",
@@ -503,7 +534,7 @@ def save_outputs_to_host(problem_title: str = "unnamed", base_path: str = "") ->
     """
     session = get_sandbox_session()
     
-    if not session._initialized or not session.work_dir:
+    if not session.work_dir:
         return {
             "success": False,
             "output_path": "",
@@ -545,7 +576,12 @@ def save_outputs_to_host(problem_title: str = "unnamed", base_path: str = "") ->
         files_copied = []
         sandbox_work_dir = Path(session.work_dir)
         
+        ignored_names = {".sandbox_build", "__pycache__"}
+
         for item in sandbox_work_dir.iterdir():
+            if item.name in ignored_names:
+                continue
+
             if item.is_file():
                 dest = output_path / item.name
                 shutil.copy2(item, dest)

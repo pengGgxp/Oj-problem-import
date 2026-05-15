@@ -6,7 +6,7 @@
 2. 环境变量（回退）：从 .env 文件或系统环境变量加载
 """
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Optional, Dict, Any
+from typing import Optional, Dict
 import os
 
 
@@ -77,6 +77,8 @@ class DockerSettings(BaseSettings):
     
     # 默认镜像
     default_image: str = "python:3.10-slim"
+    default_language: str = "python"
+    language_images_json: str = ""
     
     # 资源限制
     default_mem_limit: str = "512m"
@@ -91,6 +93,28 @@ class DockerSettings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore"
     )
+
+    @property
+    def language_images(self) -> Dict[str, str]:
+        """
+        每种语言对应的 Docker 镜像覆盖配置。
+
+        可通过 DOCKER_LANGUAGE_IMAGES_JSON 配置，例如:
+        {"python":"python:3.12-slim","cpp":"gcc:13","java":"eclipse-temurin:17"}
+        """
+        if not self.language_images_json.strip():
+            return {}
+
+        try:
+            import json
+
+            data = json.loads(self.language_images_json)
+            if isinstance(data, dict):
+                return {str(key): str(value) for key, value in data.items() if value}
+        except Exception:
+            pass
+
+        return {}
 
 
 class WorkflowSettings(BaseSettings):
