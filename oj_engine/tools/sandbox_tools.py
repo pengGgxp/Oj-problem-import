@@ -13,6 +13,7 @@ Sandbox Tools for Agent - 沙箱执行工具集
 from langchain_core.tools import tool
 from ..sandbox import SandboxSession, get_supported_languages
 from ..config import settings
+from ..user_messages import format_user_friendly_error
 import shutil
 import sys
 from pathlib import Path
@@ -145,7 +146,7 @@ def execute_code(code_file: str, input_file: str = "", timeout: int = 5, languag
     except Exception as e:
         return {
             "status": "error",
-            "stderr": str(e),
+            "stderr": format_user_friendly_error(e, action="执行代码"),
             "exit_code": -1,
             "execution_time": 0,
             "memory_usage": 0,
@@ -188,7 +189,7 @@ def write_code_file(filename: str, code: str) -> dict:
             "success": False,
             "filepath": filename,
             "size": 0,
-            "error": str(e)
+            "error": format_user_friendly_error(e, action="写入代码文件")
         }
 
 
@@ -282,7 +283,7 @@ def read_file_content(filename: str, start_line: int = 1, max_lines: int = 100) 
             "start_line": start_line,
             "end_line": start_line,
             "preview": "",
-            "error": str(e)
+            "error": format_user_friendly_error(e, action="读取文件")
         }
 
 
@@ -353,7 +354,7 @@ def edit_file_content(filename: str, old_text: str, new_text: str, replace_all: 
             "success": False,
             "replacements": 0,
             "new_content_preview": "",
-            "error": str(e)
+            "error": format_user_friendly_error(e, action="编辑文件")
         }
 
 
@@ -440,7 +441,7 @@ def search_in_file(filename: str, search_text: str, case_sensitive: bool = True,
             "success": False,
             "matches": [],
             "total_matches": 0,
-            "error": str(e)
+            "error": format_user_friendly_error(e, action="搜索文件")
         }
 
 
@@ -467,7 +468,7 @@ def delete_file(filename: str) -> dict:
         return {
             "success": False,
             "message": "",
-            "error": "Sandbox session not initialized"
+            "error": "沙箱尚未初始化，请先启动沙箱后再执行。"
         }
     
     try:
@@ -502,7 +503,7 @@ def delete_file(filename: str) -> dict:
         return {
             "success": False,
             "message": "",
-            "error": str(e)
+            "error": format_user_friendly_error(e, action="删除文件")
         }
 
 
@@ -539,7 +540,7 @@ def save_outputs_to_host(problem_title: str = "unnamed", base_path: str = "") ->
             "success": False,
             "output_path": "",
             "files_copied": [],
-            "error": "Sandbox session not initialized"
+            "error": "沙箱尚未初始化，请先启动沙箱后再执行。"
         }
     
     try:
@@ -609,7 +610,7 @@ def save_outputs_to_host(problem_title: str = "unnamed", base_path: str = "") ->
             "success": False,
             "output_path": "",
             "files_copied": [],
-            "error": str(e)
+            "error": format_user_friendly_error(e, action="保存输出")
         }
 
 

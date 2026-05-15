@@ -6,6 +6,7 @@
 """
 import sys
 import questionary
+from .user_messages import format_user_friendly_error
 from .config_manager import (
     save_config,
     get_config_path,
@@ -174,7 +175,5 @@ def run_config_wizard() -> bool:
         print("\n\n✗ 配置已取消")
         return False
     except Exception as e:
-        print(f"\n✗ 配置过程中出现错误: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"\n✗ {format_user_friendly_error(e, action='配置')}")
         return False

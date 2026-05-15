@@ -7,6 +7,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import List, Dict, Any
 from .task_models import TaskItem, TaskStatus
 from .task_worker import TaskWorker
+from .user_messages import format_user_friendly_error
 import time
 import logging
 
@@ -96,11 +97,11 @@ class TaskScheduler:
                 except Exception as e:
                     logger.error(f"Task {task.task_id} failed with exception: {e}")
                     task.status = TaskStatus.FAILED
-                    task.error_message = str(e)
+                    task.error_message = format_user_friendly_error(e, action="执行任务")
                     completed_tasks.append(task)
                     failed_count += 1
                     
-                    print(f"[{idx}/{total}] ✗ {task.problem_title} - 异常: {str(e)[:100]}")
+                    print(f"[{idx}/{total}] ✗ {task.problem_title} - 异常: {task.error_message[:100]}")
         
         # 排序：成功的在前，失败的在后
         completed_tasks.sort(key=lambda t: (t.status != TaskStatus.SUCCESS, t.start_time or 0))
@@ -147,12 +148,12 @@ class TaskScheduler:
                 last_error = result.error_message
                 
             except Exception as e:
-                last_error = str(e)
+                last_error = format_user_friendly_error(e, action="执行任务")
                 logger.warning(f"Attempt {attempt} failed for task {task.task_id}: {e}")
                 
                 # 更新任务状态
                 task.status = TaskStatus.FAILED
-                task.error_message = str(e)
+                task.error_message = last_error
         
         # 所有重试都失败
         task.status = TaskStatus.FAILED

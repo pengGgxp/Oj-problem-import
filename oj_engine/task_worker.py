@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from .agent import ProblemGenerationAgent
 from .task_models import TaskItem, TaskStatus
+from .user_messages import format_user_friendly_error
 import time
 
 
@@ -69,8 +70,8 @@ class TaskWorker:
             
         except Exception as e:
             task.status = TaskStatus.FAILED
-            task.error_message = str(e)
-            print(f"[Worker] ✗ 失败: {task.problem_title} - {str(e)[:100]}")
+            task.error_message = format_user_friendly_error(e, action="处理题目")
+            print(f"[Worker] ✗ 失败: {task.problem_title} - {task.error_message[:100]}")
         
         finally:
             task.end_time = time.time()
