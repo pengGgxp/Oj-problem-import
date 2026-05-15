@@ -208,6 +208,200 @@ def build_runtime_specs(
     return specs
 
 
+CommandBuilder = Callable[[str], str]
+
+
+def _quote(path: str) -> str:
+    """Quote a path or shell argument for commands executed inside Linux containers."""
+    return shlex.quote(path.replace("\\", "/"))
+
+
+def _safe_stem(code_file: str) -> str:
+    stem = Path(code_file).stem or "solution"
+    return re.sub(r"[^A-Za-z0-9_.-]", "_", stem)
+
+
+def _python_command(code_file: str) -> str:
+    return f"python3 {_quote(code_file)}"
+
+
+def _cpp_command(code_file: str) -> str:
+    binary = f".sandbox_build/{_safe_stem(code_file)}"
+    return (
+        f"mkdir -p .sandbox_build && "
+        f"g++ -std=c++17 -O2 -pipe -o {_quote(binary)} {_quote(code_file)} && "
+        f"{_quote('./' + binary)}"
+    )
+
+
+def _c_command(code_file: str) -> str:
+    binary = f".sandbox_build/{_safe_stem(code_file)}"
+    return (
+        f"mkdir -p .sandbox_build && "
+        f"gcc -std=c11 -O2 -pipe -o {_quote(binary)} {_quote(code_file)} && "
+        f"{_quote('./' + binary)}"
+    )
+
+
+def _java_command(code_file: str) -> str:
+    # OJ Java submissions often use public class Main, but official solutions
+    # may use a different public class name. Copy to the matching file name.
+    quoted_code_file = _quote(code_file)
+    return (
+        "mkdir -p .sandbox_build/java && "
+        "class_name=$(grep -E 'public[[:space:]]+class[[:space:]]+[A-Za-z_][A-Za-z0-9_]*' "
+        f"{quoted_code_file} | head -n 1 | sed -E "
+        "'s/.*public[[:space:]]+class[[:space:]]+([A-Za-z_][A-Za-z0-9_]*).*/\\1/') && "
+        "if [ -z \"$class_name\" ]; then class_name=Main; fi && "
+        f"cp {quoted_code_file} \".sandbox_build/java/$class_name.java\" && "
+        "javac -d .sandbox_build/java \".sandbox_build/java/$class_name.java\" && "
+        "java -cp .sandbox_build/java \"$class_name\""
+    )
+
+
+def _javascript_command(code_file: str) -> str:
+    return f"node {_quote(code_file)}"
+
+
+def _go_command(code_file: str) -> str:
+    return (
+        "mkdir -p .sandbox_build/go-cache .sandbox_build/go-tmp && "
+        "GOCACHE=/workspace/.sandbox_build/go-cache "
+        f"GOTMPDIR=/workspace/.sandbox_build/go-tmp go run {_quote(code_file)}"
+    )
+
+
+def _rust_command(code_file: str) -> str:
+    binary = f".sandbox_build/{_safe_stem(code_file)}"
+    return (
+        f"mkdir -p .sandbox_build && "
+        f"rustc -O {_quote(code_file)} -o {_quote(binary)} && "
+        f"{_quote('./' + binary)}"
+    )
+
+
+@dataclass(frozen=True)
+class RuntimeSpec:
+    """Docker runtime information for one submission language."""
+
+    language: str
+    image: str
+    extensions: tuple[str, ...]
+    aliases: tuple[str, ...]
+    command_builder: CommandBuilder
+
+
+DEFAULT_RUNTIME_SPECS: Dict[str, RuntimeSpec] = {
+    "python": RuntimeSpec(
+        language="python",
+        image="python:3.10-slim",
+        extensions=(".py",),
+        aliases=("py", "python", "python3", "pypy", "pypy3"),
+        command_builder=_python_command,
+    ),
+    "cpp": RuntimeSpec(
+        language="cpp",
+        image="gcc:13",
+        extensions=(".cpp", ".cc", ".cxx", ".c++"),
+        aliases=("cpp", "c++", "c++17", "cpp17", "g++", "gnu++17"),
+        command_builder=_cpp_command,
+    ),
+    "c": RuntimeSpec(
+        language="c",
+        image="gcc:13",
+        extensions=(".c",),
+        aliases=("c", "gcc", "gnu11", "c11"),
+        command_builder=_c_command,
+    ),
+    "java": RuntimeSpec(
+        language="java",
+        image="eclipse-temurin:17",
+        extensions=(".java",),
+        aliases=("java", "jdk", "openjdk"),
+        command_builder=_java_command,
+    ),
+    "javascript": RuntimeSpec(
+        language="javascript",
+        image="node:20-slim",
+        extensions=(".js", ".mjs"),
+        aliases=("js", "javascript", "node", "nodejs"),
+        command_builder=_javascript_command,
+    ),
+    "go": RuntimeSpec(
+        language="go",
+        image="golang:1.22",
+        extensions=(".go",),
+        aliases=("go", "golang"),
+        command_builder=_go_command,
+    ),
+    "rust": RuntimeSpec(
+        language="rust",
+        image="rust:1",
+        extensions=(".rs",),
+        aliases=("rs", "rust", "rustlang"),
+        command_builder=_rust_command,
+    ),
+}
+
+
+def _alias_key(value: str) -> str:
+    return value.strip().lower().replace(" ", "").replace("-", "")
+
+
+LANGUAGE_ALIASES: Dict[str, str] = {}
+EXTENSION_TO_LANGUAGE: Dict[str, str] = {}
+for _language, _spec in DEFAULT_RUNTIME_SPECS.items():
+    LANGUAGE_ALIASES[_alias_key(_language)] = _language
+    for _alias in _spec.aliases:
+        LANGUAGE_ALIASES[_alias_key(_alias)] = _language
+    for _extension in _spec.extensions:
+        EXTENSION_TO_LANGUAGE[_extension.lower()] = _language
+
+
+def get_supported_languages() -> List[str]:
+    """Return canonical language names supported by the sandbox runtime registry."""
+    return sorted(DEFAULT_RUNTIME_SPECS.keys())
+
+
+def infer_language_from_filename(code_file: str) -> Optional[str]:
+    """Infer a canonical language from a source file extension."""
+    suffix = Path(code_file).suffix.lower()
+    return EXTENSION_TO_LANGUAGE.get(suffix)
+
+
+def normalize_language(language: str = "", code_file: str = "") -> str:
+    """Normalize a user-facing language name or infer it from the source filename."""
+    if language and language.strip():
+        key = _alias_key(language)
+        if key in LANGUAGE_ALIASES:
+            return LANGUAGE_ALIASES[key]
+        supported = ", ".join(get_supported_languages())
+        raise ValueError(f"Unsupported language '{language}'. Supported languages: {supported}")
+
+    inferred = infer_language_from_filename(code_file)
+    if inferred:
+        return inferred
+
+    supported = ", ".join(get_supported_languages())
+    raise ValueError(
+        f"Cannot infer language from file '{code_file}'. "
+        f"Pass language explicitly. Supported languages: {supported}"
+    )
+
+
+def build_runtime_specs(
+    image_overrides: Optional[Mapping[str, str]] = None,
+) -> Dict[str, RuntimeSpec]:
+    """Build runtime specs with optional per-language Docker image overrides."""
+    specs = dict(DEFAULT_RUNTIME_SPECS)
+    for language, image in (image_overrides or {}).items():
+        if not image:
+            continue
+        canonical = normalize_language(language)
+        specs[canonical] = replace(specs[canonical], image=image)
+    return specs
+
+
 class SandboxSession:
     """
     持久化沙箱会话
