@@ -13,6 +13,7 @@ import sys
 from .agent import ProblemGenerationAgent
 from .task_models import TaskItem, TaskStatus
 from .task_worker import TaskWorker
+from .user_messages import format_user_friendly_error
 import time
 import logging
 

@@ -9,9 +9,10 @@ from pathlib import Path
 from oj_engine.agent import ProblemGenerationAgent
 from oj_engine.config_manager import is_configured, load_config, mask_api_key, get_config_path
 from oj_engine.config_wizard import run_config_wizard
+from oj_engine.user_messages import format_user_friendly_error
 
 
-@click.group()
+@click.group(context_settings={"help_option_names": ["-h", "--help"]})
 def main():
     """oj problem import - AI OJ 题目生成工具
     
@@ -23,7 +24,7 @@ def main():
 
 @main.command()
 @click.option('--file', '-f', 'file_path', type=click.Path(exists=True), 
-              help='题目描述文件路径（UTF-8 编码）')
+              help='任务文件路径（UTF-8 编码，文件内容会作为提示词）')
 @click.option('--description', '-d', type=str, 
               help='题目描述文本（直接传入）')
 @click.option('--max-iterations', '-m', default=20, type=click.IntRange(1),
@@ -37,16 +38,16 @@ def main():
 def generate(file_path, description, max_iterations, output_dir, solution_file, solution_language):
     """生成 OJ 题目测试数据包
     
-    根据题目描述自动生成：
+    根据任务文件或任务文本自动生成：
     - 标答代码 (solution.<ext>)
     - 数据生成器 (generator.py)
     - 10组测试数据 (tests/ 目录)
     
     示例:
-        # 从文件读取题目描述
+        # 从文件读取任务内容
         oj-problem-import generate -f problem.txt
         
-        # 直接传入题目描述
+        # 直接传入任务内容
         oj-problem-import generate -d "A+B Problem..."
 
         # 使用官方 C++ 题解生成输出
@@ -75,7 +76,7 @@ def generate(file_path, description, max_iterations, output_dir, solution_file, 
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 problem_description = f.read()
-            click.echo(f"✓ 已从文件读取题目描述: {file_path}")
+            click.echo(f"✓ 已从文件读取任务内容: {file_path}")
         except Exception as e:
             click.echo(f"错误: 无法读取文件 {file_path}: {e}", err=True)
             sys.exit(1)
@@ -84,7 +85,7 @@ def generate(file_path, description, max_iterations, output_dir, solution_file, 
     
     # 验证题目描述不为空
     if not problem_description or not problem_description.strip():
-        click.echo("错误: 题目描述不能为空", err=True)
+        click.echo("错误: 任务内容不能为空", err=True)
         sys.exit(1)
 
     official_solution = ""
@@ -99,17 +100,14 @@ def generate(file_path, description, max_iterations, output_dir, solution_file, 
     
     # 显示配置信息
     click.echo("\n" + "=" * 80)
-    click.echo("oj problem import - 题目生成")
+    click.echo("oj problem import - 任务生成")
     click.echo("=" * 80)
     click.echo(f"\n配置:")
     graph_limit = ProblemGenerationAgent.get_graph_recursion_limit(max_iterations)
     click.echo(f"  - Agent 最大迭代轮次: {max_iterations}")
     click.echo(f"  - LangGraph 图步数上限: {graph_limit}")
     click.echo(f"  - 输出目录: {output_dir}")
-    if official_solution:
-        click.echo(f"  - 官方题解: {solution_file}")
-        click.echo(f"  - 题解语言: {solution_language or '自动判断'}")
-    click.echo(f"\n题目预览:")
+    click.echo(f"\n任务预览:")
     preview = problem_description[:200].strip()
     click.echo(f"  {preview}...")
     click.echo("-" * 80)
@@ -170,6 +168,14 @@ def generate(file_path, description, max_iterations, output_dir, solution_file, 
         sys.exit(1)
 
 
+def _print_batch_usage_guide():
+    """Print a short batch-mode guide for the terminal."""
+    click.echo("\n批量模式提示:")
+    click.echo("  输入支持: 单个文件、多个文件、逗号分隔列表、目录")
+    click.echo("  目录会自动扫描 .txt/.md/.markdown 文件，并保留原始目录结构")
+    click.echo("  查看完整用法: oj-problem-import batch --help")
+
+
 @main.command()
 def configure():
     """重新配置 oj problem import"""
@@ -195,7 +201,35 @@ def show_config():
         click.echo("未配置，请运行 'oj-problem-import configure'")
 
 
-@main.command()
+@main.command(
+    help="""\b
+批量生成多个 OJ 题目测试数据包。
+
+\b
+支持的输入格式:
+  - 单个文件: problem1.txt
+  - 多个文件: problem1.txt problem2.txt problem3.txt
+  - 逗号分隔: problem1.txt,problem2.txt
+  - 目录: ./problems/ (自动扫描 .txt/.md/.markdown 文件)
+
+\b
+执行行为:
+  - 每个题目独立执行，失败不会影响其他任务
+  - 目录输入会保留原始目录结构，方便按类别管理产物
+  - 输出默认保存到 outputs/
+
+\b
+示例:
+  oj-problem-import batch problem1.txt
+  oj-problem-import batch problem1.txt problem2.txt
+  oj-problem-import batch problem1.txt,problem2.txt
+  oj-problem-import batch ./problems/ -w 8 -r 3
+
+\b
+提示:
+  运行 oj-problem-import batch --help 可以查看完整帮助和参数说明。
+"""
+)
 @click.argument('inputs', nargs=-1, required=True)
 @click.option('--max-workers', '-w', default=4, type=int,
               help='最大并行工作进程数（默认: 4）')
@@ -240,10 +274,13 @@ def batch(inputs, max_workers, max_iterations, max_retries, output_dir, show_log
             click.echo("\n✗ 配置失败，无法继续执行", err=True)
             sys.exit(1)
         click.echo("\n配置完成！继续执行任务...\n")
+
+    _print_batch_usage_guide()
     
     # 扫描所有输入
     all_files = []
     input_to_files = {}  # 记录每个输入路径对应的文件列表
+    scan_errors = 0
     
     for input_path in inputs:
         try:
@@ -256,6 +293,10 @@ def batch(inputs, max_workers, max_iterations, max_retries, output_dir, show_log
     
     if not all_files:
         click.echo("错误: 未找到任何题目文件", err=True)
+        if scan_errors:
+            click.echo("提示: 上面的路径没有解析出可执行的题目文件，请检查路径和文件格式。", err=True)
+        click.echo("支持的输入形式: 单个文件、多个文件、逗号分隔列表、目录。", err=True)
+        click.echo("查看完整帮助: oj-problem-import batch --help", err=True)
         sys.exit(1)
     
     click.echo(f"\n共发现 {len(all_files)} 个题目文件")
@@ -320,9 +361,7 @@ def batch(inputs, max_workers, max_iterations, max_retries, output_dir, show_log
             sys.exit(1)
         
     except Exception as e:
-        click.echo(f"\n✗ 调度器错误: {str(e)}", err=True)
-        import traceback
-        traceback.print_exc()
+        click.echo(f"\n✗ {format_user_friendly_error(e, action='批量任务调度')}", err=True)
         sys.exit(1)
 
 

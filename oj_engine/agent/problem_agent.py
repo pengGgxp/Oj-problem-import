@@ -32,12 +32,13 @@ from ..tools import (
     set_global_sandbox_session,
 )
 from ..sandbox import SandboxSession
+from ..user_messages import format_user_friendly_error
 
 
 # ReAct System Prompt
 REACT_SYSTEM_PROMPT = """你是专业的 OJ (Online Judge) 题目测试数据包生成专家。
 
-你的目标是根据题目描述和可选的官方题解/标程，生成一套可复现、可验证、强度合理的测试数据包。
+你的目标是根据用户传入的任务文件内容，生成一套可复现、可验证、强度合理的测试数据包。任务文件就是用户的完整提示词：其中可能包含题面、额外要求、参考代码、官方题解或指定语言，请整体理解后执行。
 
 ## 产物要求
 
@@ -46,7 +47,7 @@ REACT_SYSTEM_PROMPT = """你是专业的 OJ (Online Judge) 题目测试数据包
 2. `generator.py` - 测试数据生成器，统一使用 Python。
 3. `tests/` - 成对的 `1.in`/`1.out`、`2.in`/`2.out` 等测试文件。
 
-如果用户提供了官方题解，必须优先原样保存并使用它生成输出；只有在没有官方题解时，才自行编写标答。不要把非 Python 官方题解改写成 Python。
+如果任务文件中包含官方题解、参考代码或标程，必须优先识别并原样保存为 `solution.<ext>` 后使用它生成输出；只有任务文件未提供可用标程时，才自行编写标答。不要把非 Python 标程改写成 Python。
 
 ## 语言和沙箱
 
@@ -62,13 +63,13 @@ REACT_SYSTEM_PROMPT = """你是专业的 OJ (Online Judge) 题目测试数据包
 
 1. 分析题面：提取题名、输入输出格式、约束、样例和隐含边界。
 2. 确定标答语言和文件名：
-   - 用户显式给出语言时，使用该语言。
-   - 未给出语言时，根据官方题解代码特征或文件扩展名判断。
-   - 无官方题解时，默认写 Python 标答。
+   - 任务文件显式指定语言时，使用该语言。
+   - 未指定语言时，根据任务文件中的标程代码特征或文件名提示判断。
+   - 无可用标程时，默认写 Python 标答，除非任务文件要求其他语言。
 3. 保存标答到 `solution.<ext>`，保存生成器到 `generator.py`。
 4. 验证样例：
    - 如果题面有样例，第 1 组必须使用题面样例。
-   - 运行标答检查输出是否与样例输出一致；不一致时优先检查输入格式、题意或官方题解语言判断。
+   - 运行标答检查输出是否与样例输出一致；不一致时优先检查输入格式、题意或标程语言判断。
 5. 生成测试：
    - 默认 10 组，除非题面明确要求其他数量。
    - 数据分布约为 30% 小数据 + 50% 中等数据 + 20% 大数据/边界/最坏情况。
@@ -184,14 +185,12 @@ class ProblemGenerationAgent:
         self,
         problem_description: str,
         base_path: str = "",
-        official_solution: str = "",
-        solution_language: str = "",
     ) -> dict:
         """
         主入口:根据题目描述生成完整产物
         
         Args:
-            problem_description: 题目描述文本
+            problem_description: 任务文件内容/题目描述文本。用户可以在其中写入题面、生成要求、标程或语言要求。
             base_path: 基础路径（可选），用于保持目录结构。例如 "problems/easy"
             official_solution: 用户提供的官方题解/标程代码（可选）
             solution_language: 官方题解语言（可选，未提供时由 Agent 判断）
@@ -227,38 +226,19 @@ save_outputs_to_host(problem_title="题目名称")
 这会将输出保存到: outputs/{{timestamp}}_{{title}}/
 """
 
-        official_solution_instruction = ""
-        if official_solution:
-            language_text = solution_language.strip() or "未指定，请根据代码特征判断"
-            official_solution_instruction = f"""
-用户提供了官方题解/标程，请优先使用它作为 `solution.<ext>`：
-- 官方题解语言: {language_text}
-- 保存时选择与语言匹配的文件名，例如 `solution.cpp`、`solution.java`、`solution.py`。
-- 除非存在明显的编译入口问题（例如 Java 类名/文件名不匹配）或格式包装问题，不要改写算法逻辑。
-
-官方题解代码:
-```text
-{official_solution}
-```
-"""
-        else:
-            official_solution_instruction = """
-用户未提供官方题解/标程。请自行编写正确标答；默认使用 Python，除非题面或任务说明明确要求其他语言。
-"""
-        
         full_prompt = f"""{REACT_SYSTEM_PROMPT}
 
 ---
 
-任务:为以下 OJ 题目生成完整的测试数据包
+任务:根据以下任务文件内容生成完整的 OJ 测试数据包。请把任务文件视为用户提示词本身，而不是只把它当作题面；如果其中包含官方题解、标程、参考代码、语言要求或特殊生成要求，都要一并理解并执行。
 
-题目描述:
+任务文件内容:
 {problem_description}
 
 {official_solution_instruction}
 
 要求:
-1. 生成或保存正确的标答代码 `solution.<ext>`，语言与官方题解一致；无官方题解时默认 Python
+1. 生成或保存正确的标答代码 `solution.<ext>`；如果任务文件包含标程/参考代码，优先原样使用并根据内容自动判断语言；否则默认生成 Python 标答，除非任务文件明确要求其他语言
 2. 生成数据生成器 `generator.py`，生成器必须使用 Python
 3. 生成测试数据:
    - **第1组必须是题目中的样例输入输出** (如果题目提供了样例)
@@ -298,7 +278,7 @@ save_outputs_to_host(problem_title="题目名称")
             return result
             
         except Exception as e:
-            print(f"\n[Agent] Error: {str(e)}")
+            print(f"\n[Agent] Error: {format_user_friendly_error(e, action='生成题目')}")
             raise
     
     def generate_problem_with_retry(self, problem_description: str,
@@ -327,8 +307,6 @@ save_outputs_to_host(problem_title="题目名称")
                 result = self.generate_problem(
                     problem_description,
                     base_path=base_path,
-                    official_solution=official_solution,
-                    solution_language=solution_language,
                 )
                 
                 # 检查结果是否包含必要信息
@@ -337,7 +315,7 @@ save_outputs_to_host(problem_title="题目名称")
                 
             except Exception as e:
                 last_error = e
-                print(f"[Agent] Attempt {attempt} failed: {str(e)}")
+                print(f"[Agent] Attempt {attempt} failed: {format_user_friendly_error(e, action='生成题目')}")
                 if attempt < max_retries:
                     print("[Agent] Retrying...")
         

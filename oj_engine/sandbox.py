@@ -11,6 +11,201 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, Dict, List, Mapping, Optional
 from .state import ExecutionResult
+from .user_messages import format_user_friendly_error
+
+
+CommandBuilder = Callable[[str], str]
+
+
+def _quote(path: str) -> str:
+    """Quote a path or shell argument for commands executed inside Linux containers."""
+    return shlex.quote(path.replace("\\", "/"))
+
+
+def _safe_stem(code_file: str) -> str:
+    stem = Path(code_file).stem or "solution"
+    return re.sub(r"[^A-Za-z0-9_.-]", "_", stem)
+
+
+def _python_command(code_file: str) -> str:
+    return f"python3 {_quote(code_file)}"
+
+
+def _cpp_command(code_file: str) -> str:
+    binary = f".sandbox_build/{_safe_stem(code_file)}"
+    return (
+        f"mkdir -p .sandbox_build && "
+        f"g++ -std=c++17 -O2 -pipe -o {_quote(binary)} {_quote(code_file)} && "
+        f"{_quote('./' + binary)}"
+    )
+
+
+def _c_command(code_file: str) -> str:
+    binary = f".sandbox_build/{_safe_stem(code_file)}"
+    return (
+        f"mkdir -p .sandbox_build && "
+        f"gcc -std=c11 -O2 -pipe -o {_quote(binary)} {_quote(code_file)} && "
+        f"{_quote('./' + binary)}"
+    )
+
+
+def _java_command(code_file: str) -> str:
+    # OJ Java submissions often use public class Main, but official solutions
+    # may use a different public class name. Copy to the matching file name.
+    quoted_code_file = _quote(code_file)
+    return (
+        "mkdir -p .sandbox_build/java && "
+        "class_name=$(grep -E 'public[[:space:]]+class[[:space:]]+[A-Za-z_][A-Za-z0-9_]*' "
+        f"{quoted_code_file} | head -n 1 | sed -E "
+        "'s/.*public[[:space:]]+class[[:space:]]+([A-Za-z_][A-Za-z0-9_]*).*/\\1/') && "
+        "if [ -z \"$class_name\" ]; then class_name=Main; fi && "
+        f"cp {quoted_code_file} \".sandbox_build/java/$class_name.java\" && "
+        "javac -d .sandbox_build/java \".sandbox_build/java/$class_name.java\" && "
+        "java -cp .sandbox_build/java \"$class_name\""
+    )
+
+
+def _javascript_command(code_file: str) -> str:
+    return f"node {_quote(code_file)}"
+
+
+def _go_command(code_file: str) -> str:
+    return (
+        "mkdir -p .sandbox_build/go-cache .sandbox_build/go-tmp && "
+        "GOCACHE=/workspace/.sandbox_build/go-cache "
+        f"GOTMPDIR=/workspace/.sandbox_build/go-tmp go run {_quote(code_file)}"
+    )
+
+
+def _rust_command(code_file: str) -> str:
+    binary = f".sandbox_build/{_safe_stem(code_file)}"
+    return (
+        f"mkdir -p .sandbox_build && "
+        f"rustc -O {_quote(code_file)} -o {_quote(binary)} && "
+        f"{_quote('./' + binary)}"
+    )
+
+
+@dataclass(frozen=True)
+class RuntimeSpec:
+    """Docker runtime information for one submission language."""
+
+    language: str
+    image: str
+    extensions: tuple[str, ...]
+    aliases: tuple[str, ...]
+    command_builder: CommandBuilder
+
+
+DEFAULT_RUNTIME_SPECS: Dict[str, RuntimeSpec] = {
+    "python": RuntimeSpec(
+        language="python",
+        image="python:3.10-slim",
+        extensions=(".py",),
+        aliases=("py", "python", "python3", "pypy", "pypy3"),
+        command_builder=_python_command,
+    ),
+    "cpp": RuntimeSpec(
+        language="cpp",
+        image="gcc:13",
+        extensions=(".cpp", ".cc", ".cxx", ".c++"),
+        aliases=("cpp", "c++", "c++17", "cpp17", "g++", "gnu++17"),
+        command_builder=_cpp_command,
+    ),
+    "c": RuntimeSpec(
+        language="c",
+        image="gcc:13",
+        extensions=(".c",),
+        aliases=("c", "gcc", "gnu11", "c11"),
+        command_builder=_c_command,
+    ),
+    "java": RuntimeSpec(
+        language="java",
+        image="eclipse-temurin:17",
+        extensions=(".java",),
+        aliases=("java", "jdk", "openjdk"),
+        command_builder=_java_command,
+    ),
+    "javascript": RuntimeSpec(
+        language="javascript",
+        image="node:20-slim",
+        extensions=(".js", ".mjs"),
+        aliases=("js", "javascript", "node", "nodejs"),
+        command_builder=_javascript_command,
+    ),
+    "go": RuntimeSpec(
+        language="go",
+        image="golang:1.22",
+        extensions=(".go",),
+        aliases=("go", "golang"),
+        command_builder=_go_command,
+    ),
+    "rust": RuntimeSpec(
+        language="rust",
+        image="rust:1",
+        extensions=(".rs",),
+        aliases=("rs", "rust", "rustlang"),
+        command_builder=_rust_command,
+    ),
+}
+
+
+def _alias_key(value: str) -> str:
+    return value.strip().lower().replace(" ", "").replace("-", "")
+
+
+LANGUAGE_ALIASES: Dict[str, str] = {}
+EXTENSION_TO_LANGUAGE: Dict[str, str] = {}
+for _language, _spec in DEFAULT_RUNTIME_SPECS.items():
+    LANGUAGE_ALIASES[_alias_key(_language)] = _language
+    for _alias in _spec.aliases:
+        LANGUAGE_ALIASES[_alias_key(_alias)] = _language
+    for _extension in _spec.extensions:
+        EXTENSION_TO_LANGUAGE[_extension.lower()] = _language
+
+
+def get_supported_languages() -> List[str]:
+    """Return canonical language names supported by the sandbox runtime registry."""
+    return sorted(DEFAULT_RUNTIME_SPECS.keys())
+
+
+def infer_language_from_filename(code_file: str) -> Optional[str]:
+    """Infer a canonical language from a source file extension."""
+    suffix = Path(code_file).suffix.lower()
+    return EXTENSION_TO_LANGUAGE.get(suffix)
+
+
+def normalize_language(language: str = "", code_file: str = "") -> str:
+    """Normalize a user-facing language name or infer it from the source filename."""
+    if language and language.strip():
+        key = _alias_key(language)
+        if key in LANGUAGE_ALIASES:
+            return LANGUAGE_ALIASES[key]
+        supported = ", ".join(get_supported_languages())
+        raise ValueError(f"Unsupported language '{language}'. Supported languages: {supported}")
+
+    inferred = infer_language_from_filename(code_file)
+    if inferred:
+        return inferred
+
+    supported = ", ".join(get_supported_languages())
+    raise ValueError(
+        f"Cannot infer language from file '{code_file}'. "
+        f"Pass language explicitly. Supported languages: {supported}"
+    )
+
+
+def build_runtime_specs(
+    image_overrides: Optional[Mapping[str, str]] = None,
+) -> Dict[str, RuntimeSpec]:
+    """Build runtime specs with optional per-language Docker image overrides."""
+    specs = dict(DEFAULT_RUNTIME_SPECS)
+    for language, image in (image_overrides or {}).items():
+        if not image:
+            continue
+        canonical = normalize_language(language)
+        specs[canonical] = replace(specs[canonical], image=image)
+    return specs
 
 
 CommandBuilder = Callable[[str], str]
@@ -265,13 +460,7 @@ class SandboxSession:
             self.client = docker.from_env()
             self.client.ping()
         except docker.errors.DockerException as e:
-            raise RuntimeError(
-                f"无法连接到 Docker Daemon。请确保:\n"
-                f"1. Docker Desktop 正在运行\n"
-                f"2. Docker Daemon 已启动\n"
-                f"3. 当前用户有 Docker 权限\n"
-                f"错误详情: {str(e)}"
-            )
+            raise RuntimeError(format_user_friendly_error(e, action="连接 Docker")) from e
 
     def _ensure_workspace(self):
         if self.work_dir:
@@ -290,18 +479,25 @@ class SandboxSession:
         self._ensure_workspace()
         spec = self.runtime_specs[language]
 
-        # 启动容器
-        container = self.client.containers.run(
-            image=spec.image,
-            command="sleep infinity",
-            detach=True,
-            mem_limit=self.mem_limit,
-            cpu_quota=self.cpu_quota,
-            network_disabled=True,
-            volumes={self.work_dir: {'bind': '/workspace', 'mode': 'rw'}},
-            tmpfs={'/tmp': 'rw,noexec,nosuid,size=100m'},
-            working_dir='/workspace'
-        )
+        try:
+            container = self.client.containers.run(
+                image=spec.image,
+                command="sleep infinity",
+                detach=True,
+                mem_limit=self.mem_limit,
+                cpu_quota=self.cpu_quota,
+                network_disabled=True,
+                volumes={self.work_dir: {'bind': '/workspace', 'mode': 'rw'}},
+                tmpfs={'/tmp': 'rw,noexec,nosuid,size=100m'},
+                working_dir='/workspace'
+            )
+        except docker.errors.ImageNotFound as e:
+            raise RuntimeError(
+                f"Docker 镜像 {spec.image} 不存在或无法下载。\n"
+                f"请确认网络可用后运行 `docker pull {spec.image}`，然后重试。"
+            ) from e
+        except docker.errors.DockerException as e:
+            raise RuntimeError(format_user_friendly_error(e, action="启动 Docker 容器")) from e
 
         self.containers[language] = container
         self.container = container
@@ -455,7 +651,7 @@ class SandboxSession:
             文件内容字符串
         """
         if not self.work_dir:
-            raise RuntimeError("SandboxSession not initialized")
+            raise RuntimeError("沙箱尚未初始化")
 
         filepath = self._resolve_workspace_path(filename)
         with open(filepath, 'r', encoding='utf-8') as f:
@@ -494,13 +690,7 @@ class SandboxExecutor:
             # 测试连接
             self.client.ping()
         except docker.errors.DockerException as e:
-            raise RuntimeError(
-                f"无法连接到 Docker Daemon。请确保:\n"
-                f"1. Docker Desktop 正在运行\n"
-                f"2. Docker Daemon 已启动\n"
-                f"3. 当前用户有 Docker 权限\n"
-                f"错误详情: {str(e)}"
-            )
+            raise RuntimeError(format_user_friendly_error(e, action="连接 Docker")) from e
     
     def execute(self, files: Dict[str, str], commands: List[str], 
                 timeout: int = 30) -> ExecutionResult:
@@ -605,14 +795,14 @@ class SandboxExecutor:
             return ExecutionResult(
                 status="error",
                 exit_code=-1,
-                stderr=str(e),
+                stderr=format_user_friendly_error(e, action="执行 Docker 容器"),
                 error_type="container_error"
             )
         except Exception as e:
             return ExecutionResult(
                 status="error",
                 exit_code=-1,
-                stderr=str(e),
+                stderr=format_user_friendly_error(e, action="执行沙箱"),
                 error_type="system_error"
             )
         finally:
@@ -649,4 +839,5 @@ class SandboxExecutor:
         
         result = container.exec_run(cmd)
         if result.exit_code != 0:
-            raise RuntimeError(f"Failed to write file {filename}: {result.output.decode()}")
+            detail = result.output.decode(errors="ignore").strip()
+            raise RuntimeError(f"写入沙箱文件失败: {filename}。{detail}")

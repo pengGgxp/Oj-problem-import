@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from .agent import ProblemGenerationAgent
 from .task_models import TaskItem, TaskStatus
+from .user_messages import format_user_friendly_error
 import time
 
 

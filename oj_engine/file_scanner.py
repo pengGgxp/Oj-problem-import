@@ -42,7 +42,7 @@ class FileScanner:
             input_path = Path(input_path)
         
         if not input_path.exists():
-            raise FileNotFoundError(f"Path not found: {input_path}")
+            raise FileNotFoundError(f"找不到路径: {input_path}。请确认文件或目录是否存在。")
         
         if input_path.is_file():
             # 单个文件
@@ -60,7 +60,7 @@ class FileScanner:
             
             return files
         else:
-            raise FileNotFoundError(f"Invalid path: {input_path}")
+            raise FileNotFoundError(f"无效路径: {input_path}。请提供题目文件或题目目录。")
     
     @staticmethod
     def validate_file(file_path: Path) -> bool:
