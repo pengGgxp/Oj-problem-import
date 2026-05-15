@@ -44,7 +44,7 @@ REACT_SYSTEM_PROMPT = """你是专业的 OJ (Online Judge) 题目测试数据包
 
 最终沙箱工作目录只保留这些内容：
 1. `solution.<ext>` - 标答/官方题解代码，扩展名必须匹配实际语言。
-2. `generator.py` - 测试数据生成器，统一使用 Python。
+2. `generator.<ext>` - 测试数据生成器，扩展名应匹配实际语言。默认推荐 Python，但不是硬性要求；如果任务文件提供了生成器/参考代码，或其他受支持语言更适合复用逻辑、性能或类型处理，可以使用对应语言。
 3. `tests/` - 成对的 `1.in`/`1.out`、`2.in`/`2.out` 等测试文件。
 
 如果任务文件中包含官方题解、参考代码或标程，必须优先识别并原样保存为 `solution.<ext>` 后使用它生成输出；只有任务文件未提供可用标程时，才自行编写标答。不要把非 Python 标程改写成 Python。
@@ -56,7 +56,7 @@ REACT_SYSTEM_PROMPT = """你是专业的 OJ (Online Judge) 题目测试数据包
   - C++: `write_code_file(filename="solution.cpp", code=...)` 后调用 `execute_code(code_file="solution.cpp", input_file="tests/1.in", language="cpp")`
   - Java: `write_code_file(filename="solution.java", code=...)` 后调用 `execute_code(..., language="java")`
   - Python: `execute_code(code_file="solution.py", ..., language="python")`
-- 生成器始终保存为 `generator.py` 并用 `execute_code(code_file="generator.py", language="python")` 运行。
+- 生成器默认可以保存为 `generator.py` 并用 Python 运行；也可以保存为 `generator.cpp`、`generator.java` 等受支持语言文件。无论选择哪种语言，运行时都要显式传 `language`，或确保文件扩展名可正确推断。
 - 如不确定支持哪些语言，先调用 `supported_sandbox_languages`。
 
 ## 工作流程
@@ -66,7 +66,7 @@ REACT_SYSTEM_PROMPT = """你是专业的 OJ (Online Judge) 题目测试数据包
    - 任务文件显式指定语言时，使用该语言。
    - 未指定语言时，根据任务文件中的标程代码特征或文件名提示判断。
    - 无可用标程时，默认写 Python 标答，除非任务文件要求其他语言。
-3. 保存标答到 `solution.<ext>`，保存生成器到 `generator.py`。
+3. 保存标答到 `solution.<ext>`，保存生成器到 `generator.<ext>`。
 4. 验证样例：
    - 如果题面有样例，第 1 组必须使用题面样例。
    - 运行标答检查输出是否与样例输出一致；不一致时优先检查输入格式、题意或标程语言判断。
@@ -74,7 +74,7 @@ REACT_SYSTEM_PROMPT = """你是专业的 OJ (Online Judge) 题目测试数据包
    - 默认 10 组，除非题面明确要求其他数量。
    - 数据分布约为 30% 小数据 + 50% 中等数据 + 20% 大数据/边界/最坏情况。
    - 每组 `.out` 必须由标答实际运行得到，不要手写猜测。
-6. 清理临时文件，只保留 `solution.<ext>`、`generator.py`、`tests/`。
+6. 清理临时文件，只保留 `solution.<ext>`、`generator.<ext>`、`tests/`。
 7. 调用 `save_outputs_to_host` 保存产物。
 
 ## 可见思考输出
@@ -96,7 +96,7 @@ REACT_SYSTEM_PROMPT = """你是专业的 OJ (Online Judge) 题目测试数据包
 {
   "solution_file": "solution.<ext>",
   "solution_language": "python/cpp/c/java/javascript/go/rust",
-  "generator_file": "generator.py",
+  "generator_file": "generator.<ext>",
   "test_cases_count": 10,
   "data_distribution": {"small": 3, "medium": 5, "large": 2},
   "output_path": "...",
@@ -231,7 +231,7 @@ save_outputs_to_host(problem_title="题目名称")
 
 要求:
 1. 生成或保存正确的标答代码 `solution.<ext>`；如果任务文件包含标程/参考代码，优先原样使用并根据内容自动判断语言；否则默认生成 Python 标答，除非任务文件明确要求其他语言
-2. 生成数据生成器 `generator.py`，生成器必须使用 Python
+2. 生成数据生成器 `generator.<ext>`；默认推荐 Python，但不要强制。若任务文件提供了其他语言的生成器/参考代码，或其他受支持语言更适合当前数据构造、性能或类型处理，可以使用该语言
 3. 生成测试数据:
    - **第1组必须是题目中的样例输入输出** (如果题目提供了样例)
    - **测试数据数量**: 如果题目明确要求数量，使用题目要求的数量；否则默认生成10组
@@ -241,8 +241,8 @@ save_outputs_to_host(problem_title="题目名称")
 
 **重要约束**:
 - `solution.<ext>` 必须使用正确语言运行。调用 execute_code 时显式传 `language`，或确保文件扩展名可推断
-- `generator.py` 必须是有效的 Python 代码
-- **最终沙箱中只能有**: solution.<ext>, generator.py, tests/ 目录
+- `generator.<ext>` 必须使用正确语言运行。调用 execute_code 时显式传 `language`，或确保文件扩展名可推断
+- **最终沙箱中只能有**: solution.<ext>, generator.<ext>, tests/ 目录
 - **必须删除所有临时文件**后再调用 save_outputs_to_host
 {base_path_instruction}
 请按阶段给出可见思考摘要并执行，确保最终产物完整可用。
@@ -251,7 +251,7 @@ save_outputs_to_host(problem_title="题目名称")
 {{{{
   "solution_file": "solution.<ext>",
   "solution_language": "...",
-  "generator_file": "generator.py",
+  "generator_file": "generator.<ext>",
   "test_cases_count": 10,
   "data_distribution": {{"small": 3, "medium": 5, "large": 2}},
   "output_path": "...",
