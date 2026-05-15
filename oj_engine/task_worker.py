@@ -48,7 +48,7 @@ class TaskWorker:
             problem_title = self._extract_title(task.file_path, problem_description)
             task.problem_title = problem_title
             
-            print(f"\n[Worker] 开始处理: {problem_title}")
+            print(f"\n[Worker][{task.task_id}] 开始处理: {problem_title}")
             print(f"  文件: {task.file_path}")
             if task.base_path:
                 print(f"  基础路径: {task.base_path}")
@@ -64,14 +64,14 @@ class TaskWorker:
             task.output_path = output_path
             task.status = TaskStatus.SUCCESS
             
-            print(f"[Worker] ✓ 完成: {problem_title}")
+            print(f"[Worker][{task.task_id}] ✓ 完成: {problem_title}")
             if output_path:
                 print(f"  输出: {output_path}")
             
         except Exception as e:
             task.status = TaskStatus.FAILED
-            task.error_message = format_user_friendly_error(e, action="处理题目")
-            print(f"[Worker] ✗ 失败: {task.problem_title} - {task.error_message[:100]}")
+            task.error_message = str(e)
+            print(f"[Worker][{task.task_id}] ✗ 失败: {task.problem_title} - {str(e)[:100]}")
         
         finally:
             task.end_time = time.time()
@@ -142,6 +142,9 @@ class TaskWorker:
             输出路径，如果未找到则返回 None
         """
         try:
+            if result.get("output_path"):
+                return Path(result["output_path"])
+
             # 从最后的 assistant 消息中提取输出路径
             if "messages" in result:
                 messages = result["messages"]

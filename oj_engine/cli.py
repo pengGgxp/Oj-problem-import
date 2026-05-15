@@ -26,9 +26,9 @@ def main():
 @click.option('--file', '-f', 'file_path', type=click.Path(exists=True), 
               help='任务文件路径（UTF-8 编码，文件内容会作为提示词）')
 @click.option('--description', '-d', type=str, 
-              help='任务文本（直接传入，视作提示词）')
-@click.option('--max-iterations', '-m', default=20, type=int,
-              help='Agent 最大迭代次数（默认: 20）')
+              help='题目描述文本（直接传入）')
+@click.option('--max-iterations', '-m', default=20, type=click.IntRange(1),
+              help='Agent 最大迭代轮次（默认: 20，会自动换算为 LangGraph 图步数上限）')
 @click.option('--output-dir', '-o', default='outputs', type=str,
               help='输出目录（默认: outputs）')
 @click.option('--solution-file', '-s', type=click.Path(exists=True),
@@ -103,7 +103,9 @@ def generate(file_path, description, max_iterations, output_dir, solution_file, 
     click.echo("oj problem import - 任务生成")
     click.echo("=" * 80)
     click.echo(f"\n配置:")
-    click.echo(f"  - 最大迭代次数: {max_iterations}")
+    graph_limit = ProblemGenerationAgent.get_graph_recursion_limit(max_iterations)
+    click.echo(f"  - Agent 最大迭代轮次: {max_iterations}")
+    click.echo(f"  - LangGraph 图步数上限: {graph_limit}")
     click.echo(f"  - 输出目录: {output_dir}")
     click.echo(f"\n任务预览:")
     preview = problem_description[:200].strip()
@@ -129,7 +131,7 @@ def generate(file_path, description, max_iterations, output_dir, solution_file, 
         # 检查是否有输出
         if "output" in result:
             output_preview = result["output"][:500]
-            click.echo(f"\n输出预览（前500字符）:")
+            click.echo(f"\nAI 可见思考与总结（前500字符）:")
             click.echo(output_preview)
             click.echo("...")
         
@@ -157,7 +159,12 @@ def generate(file_path, description, max_iterations, output_dir, solution_file, 
         click.echo("\n" + "=" * 80)
         
     except Exception as e:
-        click.echo(f"\n✗ {format_user_friendly_error(e, action='生成题目')}", err=True)
+        click.echo(f"\n✗ 错误: {str(e)}", err=True)
+        if str(e).startswith("Agent 执行达到图步数上限"):
+            sys.exit(1)
+
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 
@@ -224,16 +231,36 @@ def show_config():
 """
 )
 @click.argument('inputs', nargs=-1, required=True)
-@click.option('--max-workers', '-w', default=4, type=int, show_default=True,
-              help='最大并行工作进程数。数值越高越快，但也更吃 CPU 和内存。')
-@click.option('--max-iterations', '-m', default=20, type=int, show_default=True,
-              help='每个任务的最大迭代次数。复杂题目可以适当调大。')
-@click.option('--max-retries', '-r', default=2, type=int, show_default=True,
-              help='单个任务失败后的最大重试次数。')
-@click.option('--output-dir', '-o', default='outputs', type=str, show_default=True,
-              help='输出根目录。目录模式会保留原始目录结构。')
-def batch(inputs, max_workers, max_iterations, max_retries, output_dir):
-    """批量生成多个 OJ 题目测试数据包。"""
+@click.option('--max-workers', '-w', default=4, type=int,
+              help='最大并行工作进程数（默认: 4）')
+@click.option('--max-iterations', '-m', default=20, type=click.IntRange(1),
+              help='每个任务的 Agent 最大迭代轮次（默认: 20，会自动换算为 LangGraph 图步数上限）')
+@click.option('--max-retries', '-r', default=2, type=int,
+              help='每个任务的最大重试次数（默认: 2）')
+@click.option('--output-dir', '-o', default='outputs', type=str,
+              help='输出目录（默认: outputs）')
+@click.option('--show-logs', is_flag=True,
+              help='按任务分组显示完整执行日志（默认只显示失败任务日志尾部）')
+@click.option('--log-lines', default=40, type=click.IntRange(0),
+              help='失败任务默认显示的日志尾部行数，0 表示不显示（默认: 40）')
+def batch(inputs, max_workers, max_iterations, max_retries, output_dir, show_logs, log_lines):
+    """批量生成多个 OJ 题目
+    
+    支持单个文件、多个文件或目录。
+    
+    示例:
+        # 单个文件
+        oj-problem-import batch problem1.txt
+        
+        # 多个文件
+        oj-problem-import batch problem1.txt problem2.txt problem3.txt
+        
+        # 目录（自动扫描所有 .txt/.md 文件）
+        oj-problem-import batch ./problems/
+        
+        # 自定义参数
+        oj-problem-import batch ./problems/ -w 8 -r 3
+    """
     from .file_scanner import FileScanner
     from .task_scheduler import TaskScheduler
     from .task_models import TaskItem, TaskStatus
@@ -260,12 +287,9 @@ def batch(inputs, max_workers, max_iterations, max_retries, output_dir):
             files = FileScanner.scan_input(input_path)
             all_files.extend(files)
             input_to_files[input_path] = files
-            click.echo(f"✓ 扫描到 {len(files)} 个文件: {input_path}")
+            click.echo(f"[OK] 扫描到 {len(files)} 个文件: {input_path}")
         except Exception as e:
-            scan_errors += 1
-            click.echo(f"✗ {format_user_friendly_error(e, action=f'扫描 {input_path}')}", err=True)
-            click.echo("  提示: 你可以传入单个文件、多个文件、逗号分隔列表或目录。", err=True)
-            click.echo("  查看帮助: oj-problem-import batch --help", err=True)
+            click.echo(f"[FAIL] 扫描失败 {input_path}: {e}", err=True)
     
     if not all_files:
         click.echo("错误: 未找到任何题目文件", err=True)
@@ -276,9 +300,6 @@ def batch(inputs, max_workers, max_iterations, max_retries, output_dir):
         sys.exit(1)
     
     click.echo(f"\n共发现 {len(all_files)} 个题目文件")
-    click.echo(f"并行工作进程: {max_workers}")
-    click.echo(f"最大重试次数: {max_retries}")
-    click.echo("-" * 80)
     
     # 创建任务列表，计算 base_path
     tasks = []
@@ -321,7 +342,10 @@ def batch(inputs, max_workers, max_iterations, max_retries, output_dir):
     try:
         scheduler = TaskScheduler(
             max_workers=max_workers,
-            max_retries=max_retries
+            max_retries=max_retries,
+            max_iterations=max_iterations,
+            show_logs=show_logs,
+            log_lines=log_lines,
         )
         
         results = scheduler.run_batch(tasks)

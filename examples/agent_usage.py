@@ -65,7 +65,7 @@ def main():
             # 检查是否有输出
             if "output" in result:
                 output_preview = result["output"][:500]
-                print(f"\nOutput preview (first 500 chars):")
+                print(f"\nAI visible reasoning and summary (first 500 chars):")
                 print(output_preview)
                 print("...")
             

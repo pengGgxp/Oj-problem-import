@@ -3,6 +3,13 @@ oj problem import - AI OJ Content Engine
 
 采用 ReAct Agent 架构,让 AI 自主决策执行流程。
 """
+import warnings
+
+warnings.filterwarnings(
+    "ignore",
+    message=r"The default value of `allowed_objects` will change in a future version.*",
+)
+
 # Agent 模式
 from .agent import ProblemGenerationAgent
 from .tools import (

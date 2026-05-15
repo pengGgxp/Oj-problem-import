@@ -1,0 +1,154 @@
+# 3蚂蚁开会 
+#20133蚂蚁开会中 LV.9国赛 2024
+
+# 问题描述
+
+二维平面上有 $n$ 只蚂蚁，每只蚂蚁有一条线段作为活动范围，第 $i$ 只蚂蚁的活动范围的两个端点为 $(u_{ix}, u_{iy}), (v_{ix}, v_{iy})$。现在蚂蚁们考虑在这些线段的交点处设置会议中心。为了尽可能节省经费，它们决定只在所有交点为整点的地方设置会议中心，请问需要设置多少个会议中心？
+
+# 输入格式
+
+输入共 $n+1$ 行。第一行为一个正整数 $n$。后面 $n$ 行，每行 $4$ 个由空格分开的整数表示 $u_{ix}, u_{iy}, v_{ix}, v_{iy}$。
+
+# 输出格式
+
+输出共 $1$ 行，一个整数表示答案。
+
+# 样例输入
+
+```
+4
+0 0 4 4
+0 4 4 0
+2 0 0 4
+2 1 2 3
+```
+
+# 样例输出
+
+```
+2
+```
+
+# 样例说明
+
+所有线段之间共有 $3$ 个不同的交点：$(0,4),(\frac{4}{3},\frac{4}{3}),(2,2)$，其中整点有 $2$ 个：$(0,4),(2,2)$。
+
+# 评测用例规模与约定
+
+对于 $20\%$ 的评测用例，保证 $0 \le u_{ix}, u_{iy}, v_{ix}, v_{iy} \le 100$。
+
+对于 $100\%$ 的评测用例，保证 $n \le 500, 0 \le u_{ix}, u_{iy}, v_{ix}, v_{iy} \le 10000$，保证任意蚂蚁的活动范围不会退化成一个点，不保证任意两条线段之间交点数量有限。
+
+# 运行限制
+
+| 语言       | 最大运行时间 | 最大运行内存 |
+|-----------|------------|-------------|
+| C++       | 1s         | 256M        |
+| C         | 1s         | 256M        |
+| Java      | 2s         | 256M        |
+| Python3   | 3s         | 256M        |
+| PyPy3     | 3s         | 256M        |
+| Go        | 3s         | 256M        |
+| JavaScript| 3s         | 256M        |
+
+
+
+
+**标签:** 国赛, 2024
+
+
+---
+
+下面是官方的标准答案，是C++语言的
+
+#include<bits/stdc++.h>
+using namespace std;
+typedef long long ll;
+
+struct Point { ll x, y; };
+struct Segment { Point u, v; };
+
+ll gcd(ll a, ll b) { return b ? gcd(b, a % b) : a; }
+
+bool onSegment(Point p, Segment s) {
+    ll cross = (p.x - s.u.x) * (s.v.y - s.u.y) - (p.y - s.u.y) * (s.v.x - s.u.x);
+    if (cross != 0) return false;
+    ll minx = min(s.u.x, s.v.x), maxx = max(s.u.x, s.v.x);
+    ll miny = min(s.u.y, s.v.y), maxy = max(s.u.y, s.v.y);
+    return (p.x >= minx && p.x <= maxx && p.y >= miny && p.y <= maxy);
+}
+
+bool lineIntersect(Segment s1, Segment s2, Point& p) {
+    ll a1 = s1.v.y - s1.u.y, b1 = s1.u.x - s1.v.x;
+    ll a2 = s2.v.y - s2.u.y, b2 = s2.u.x - s2.v.x;
+    ll det = a1 * b2 - a2 * b1;
+    if (det == 0) return false;
+
+    ll c1 = a1 * s1.u.x + b1 * s1.u.y;
+    ll c2 = a2 * s2.u.x + b2 * s2.u.y;
+    
+    p.x = (b2 * c1 - b1 * c2) / det;
+    p.y = (a1 * c2 - a2 * c1) / det;
+    return onSegment(p, s1) && onSegment(p, s2);
+}
+
+void handleColinear(Segment s1, Segment s2, set<pair<ll, ll>>& points) {
+    ll dx = s1.v.x - s1.u.x, dy = s1.v.y - s1.u.y;
+    ll g = gcd(abs(dx), abs(dy));
+    if (g == 0) {
+        if (dx == 0) {
+            ll y1 = max(min(s1.u.y, s1.v.y), min(s2.u.y, s2.v.y));
+            ll y2 = min(max(s1.u.y, s1.v.y), max(s2.u.y, s2.v.y));
+            for (ll y = y1; y <= y2; ++y)
+                points.insert({s1.u.x, y});
+        } else {
+            ll x1 = max(min(s1.u.x, s1.v.x), min(s2.u.x, s2.v.x));
+            ll x2 = min(max(s1.u.x, s1.v.x), max(s2.u.x, s2.v.x));
+            for (ll x = x1; x <= x2; ++x)
+                points.insert({x, s1.u.y});
+        }
+        return;
+    }
+
+    ll stepx = dx / g, stepy = dy / g;
+    Point cur = s1.u;
+    for (int k = 0; k <= g; ++k) {
+        if (onSegment(cur, s1) && onSegment(cur, s2))
+            points.insert({cur.x, cur.y});
+        cur.x += stepx;
+        cur.y += stepy;
+    }
+}
+
+int main() {
+    int n; cin >> n;
+    vector<Segment> segs(n);
+    for (auto& s : segs)
+        cin >> s.u.x >> s.u.y >> s.v.x >> s.v.y;
+
+    set<pair<ll, ll>> res;
+    for (int i = 0; i < n; ++i) {
+        for (int j = i+1; j < n; ++j) {
+            Point p;
+            if (lineIntersect(segs[i], segs[j], p)) {
+                if (p.x == ll(p.x) && p.y == ll(p.y))
+                    res.insert({p.x, p.y});
+            } else {
+                handleColinear(segs[i], segs[j], res);
+            }
+        }
+    }
+    cout << res.size();
+}
+
+
+
+
+---
+要20个测试数据，按照
+
+# 评测用例规模与约定
+
+对于 $20\%$ 的评测用例，保证 $0 \le u_{ix}, u_{iy}, v_{ix}, v_{iy} \le 100$。
+
+对于 $100\%$ 的评测用例，保证 $n \le 500, 0 \le u_{ix}, u_{iy}, v_{ix}, v_{iy} \le 10000$，保证任意蚂蚁的活动范围不会退化成一个点，不保证任意两条线段之间交点数量有限。

@@ -36,7 +36,7 @@ class FileScanner:
                     if f.exists() and f.is_file():
                         valid_files.append(f)
                     else:
-                        print(f"  ⚠ 跳过无效文件: {f}")
+                        print(f"  [WARN] 跳过无效文件: {f}")
                 return valid_files
             
             input_path = Path(input_path)
@@ -55,8 +55,8 @@ class FileScanner:
             ])
             
             if not files:
-                print(f"  ⚠ 目录中未找到题目文件: {input_path}")
-                print(f"     支持的格式: {', '.join(FileScanner.SUPPORTED_EXTENSIONS)}")
+                print(f"  [WARN] 目录中未找到题目文件: {input_path}")
+                print(f"         支持的格式: {', '.join(FileScanner.SUPPORTED_EXTENSIONS)}")
             
             return files
         else:
@@ -112,6 +112,6 @@ class FileScanner:
                         seen_paths.add(abs_path)
                         all_files.append(f)
             except Exception as e:
-                print(f"  ✗ 扫描失败 {input_path}: {e}")
+                print(f"  [FAIL] 扫描失败 {input_path}: {e}")
         
         return all_files
