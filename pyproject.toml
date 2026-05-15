@@ -1,6 +1,6 @@
 [project]
 name = "oj-problem-import"
-version = "0.1.5"
+version = "0.1.6"
 description = "AI OJ Content Engine - 智能 OJ 题目生成引擎"
 readme = "README.md"
 license = "MIT"
