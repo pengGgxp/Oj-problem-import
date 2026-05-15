@@ -33,9 +33,9 @@ uv run oj-problem-import generate --help
 
 ### 生成题目
 
-#### 方式一：从文件读取题目描述（推荐）
+#### 方式一：从文件读取任务内容（推荐）
 
-创建一个文本文件（例如 `problem.txt`），写入题目描述：
+创建一个文本文件（例如 `problem.txt`），写入任务内容或提示词：
 
 ```
 A + B Problem
@@ -64,13 +64,13 @@ A + B Problem
 uv run oj-problem-import generate -f problem.txt
 ```
 
-#### 方式二：直接在命令行传入题目描述
+#### 方式二：直接在命令行传入任务内容
 
 ```bash
 uv run oj-problem-import generate -d "A+B Problem. Calculate the sum of two integers."
 ```
 
-注意：对于较长的题目描述，建议使用文件方式。
+注意：对于较长的任务内容，建议使用文件方式。
 
 #### 自定义参数
 
@@ -93,8 +93,8 @@ uv run oj-problem-import generate -f problem.txt -m 30 -o ./results
 
 **选项：**
 
-- `-f, --file PATH`: 题目描述文件路径（UTF-8 编码）
-- `-d, --description TEXT`: 题目描述文本（直接传入）
+- `-f, --file PATH`: 任务文件路径（UTF-8 编码，文件内容会作为提示词）
+- `-d, --description TEXT`: 任务文本（直接传入，视作提示词）
 - `-m, --max-iterations INTEGER`: Agent 最大迭代次数（默认: 20）
 - `-o, --output-dir TEXT`: 输出目录（默认: outputs）
 

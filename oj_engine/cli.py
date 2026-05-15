@@ -23,34 +23,27 @@ def main():
 
 @main.command()
 @click.option('--file', '-f', 'file_path', type=click.Path(exists=True), 
-              help='题目描述文件路径（UTF-8 编码）')
+              help='任务文件路径（UTF-8 编码，文件内容会作为提示词）')
 @click.option('--description', '-d', type=str, 
-              help='题目描述文本（直接传入）')
+              help='任务文本（直接传入，视作提示词）')
 @click.option('--max-iterations', '-m', default=20, type=int,
               help='Agent 最大迭代次数（默认: 20）')
 @click.option('--output-dir', '-o', default='outputs', type=str,
               help='输出目录（默认: outputs）')
-@click.option('--solution-file', '-s', type=click.Path(exists=True),
-              help='官方题解/标程文件路径（可选，支持多语言）')
-@click.option('--solution-language', '-l', type=str,
-              help='官方题解语言（可选，如 python/cpp/c/java/javascript/go/rust）')
-def generate(file_path, description, max_iterations, output_dir, solution_file, solution_language):
+def generate(file_path, description, max_iterations, output_dir):
     """生成 OJ 题目测试数据包
     
-    根据题目描述自动生成：
+    根据任务文件或任务文本自动生成：
     - 标答代码 (solution.<ext>)
     - 数据生成器 (generator.py)
     - 10组测试数据 (tests/ 目录)
     
     示例:
-        # 从文件读取题目描述
+        # 从文件读取任务内容
         oj-problem-import generate -f problem.txt
         
-        # 直接传入题目描述
+        # 直接传入任务内容
         oj-problem-import generate -d "A+B Problem..."
-
-        # 使用官方 C++ 题解生成输出
-        oj-problem-import generate -f problem.txt -s solution.cpp -l cpp
         
         # 自定义参数
         oj-problem-import generate -f problem.txt -m 30 -o ./results
@@ -75,7 +68,7 @@ def generate(file_path, description, max_iterations, output_dir, solution_file, 
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 problem_description = f.read()
-            click.echo(f"✓ 已从文件读取题目描述: {file_path}")
+            click.echo(f"✓ 已从文件读取任务内容: {file_path}")
         except Exception as e:
             click.echo(f"错误: 无法读取文件 {file_path}: {e}", err=True)
             sys.exit(1)
@@ -84,30 +77,17 @@ def generate(file_path, description, max_iterations, output_dir, solution_file, 
     
     # 验证题目描述不为空
     if not problem_description or not problem_description.strip():
-        click.echo("错误: 题目描述不能为空", err=True)
+        click.echo("错误: 任务内容不能为空", err=True)
         sys.exit(1)
-
-    official_solution = ""
-    if solution_file:
-        try:
-            with open(solution_file, 'r', encoding='utf-8') as f:
-                official_solution = f.read()
-            click.echo(f"✓ 已从文件读取官方题解: {solution_file}")
-        except Exception as e:
-            click.echo(f"错误: 无法读取官方题解文件 {solution_file}: {e}", err=True)
-            sys.exit(1)
     
     # 显示配置信息
     click.echo("\n" + "=" * 80)
-    click.echo("oj problem import - 题目生成")
+    click.echo("oj problem import - 任务生成")
     click.echo("=" * 80)
     click.echo(f"\n配置:")
     click.echo(f"  - 最大迭代次数: {max_iterations}")
     click.echo(f"  - 输出目录: {output_dir}")
-    if official_solution:
-        click.echo(f"  - 官方题解: {solution_file}")
-        click.echo(f"  - 题解语言: {solution_language or '自动判断'}")
-    click.echo(f"\n题目预览:")
+    click.echo(f"\n任务预览:")
     preview = problem_description[:200].strip()
     click.echo(f"  {preview}...")
     click.echo("-" * 80)
@@ -117,11 +97,7 @@ def generate(file_path, description, max_iterations, output_dir, solution_file, 
         click.echo("\n开始生成题目...\n")
         
         with ProblemGenerationAgent(max_iterations=max_iterations) as agent:
-            result = agent.generate_problem(
-                problem_description,
-                official_solution=official_solution,
-                solution_language=solution_language or "",
-            )
+            result = agent.generate_problem(problem_description)
         
         # 显示结果
         click.echo("\n" + "=" * 80)
