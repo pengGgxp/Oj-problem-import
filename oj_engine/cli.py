@@ -26,8 +26,8 @@ def main():
               help='题目描述文件路径（UTF-8 编码）')
 @click.option('--description', '-d', type=str, 
               help='题目描述文本（直接传入）')
-@click.option('--max-iterations', '-m', default=20, type=int,
-              help='Agent 最大迭代次数（默认: 20）')
+@click.option('--max-iterations', '-m', default=20, type=click.IntRange(1),
+              help='Agent 最大迭代轮次（默认: 20，会自动换算为 LangGraph 图步数上限）')
 @click.option('--output-dir', '-o', default='outputs', type=str,
               help='输出目录（默认: outputs）')
 @click.option('--solution-file', '-s', type=click.Path(exists=True),
@@ -102,7 +102,9 @@ def generate(file_path, description, max_iterations, output_dir, solution_file, 
     click.echo("oj problem import - 题目生成")
     click.echo("=" * 80)
     click.echo(f"\n配置:")
-    click.echo(f"  - 最大迭代次数: {max_iterations}")
+    graph_limit = ProblemGenerationAgent.get_graph_recursion_limit(max_iterations)
+    click.echo(f"  - Agent 最大迭代轮次: {max_iterations}")
+    click.echo(f"  - LangGraph 图步数上限: {graph_limit}")
     click.echo(f"  - 输出目录: {output_dir}")
     if official_solution:
         click.echo(f"  - 官方题解: {solution_file}")
@@ -131,7 +133,7 @@ def generate(file_path, description, max_iterations, output_dir, solution_file, 
         # 检查是否有输出
         if "output" in result:
             output_preview = result["output"][:500]
-            click.echo(f"\n输出预览（前500字符）:")
+            click.echo(f"\nAI 可见思考与总结（前500字符）:")
             click.echo(output_preview)
             click.echo("...")
         
@@ -160,6 +162,9 @@ def generate(file_path, description, max_iterations, output_dir, solution_file, 
         
     except Exception as e:
         click.echo(f"\n✗ 错误: {str(e)}", err=True)
+        if str(e).startswith("Agent 执行达到图步数上限"):
+            sys.exit(1)
+
         import traceback
         traceback.print_exc()
         sys.exit(1)
@@ -194,13 +199,17 @@ def show_config():
 @click.argument('inputs', nargs=-1, required=True)
 @click.option('--max-workers', '-w', default=4, type=int,
               help='最大并行工作进程数（默认: 4）')
-@click.option('--max-iterations', '-m', default=20, type=int,
-              help='每个任务的最大迭代次数（默认: 20）')
+@click.option('--max-iterations', '-m', default=20, type=click.IntRange(1),
+              help='每个任务的 Agent 最大迭代轮次（默认: 20，会自动换算为 LangGraph 图步数上限）')
 @click.option('--max-retries', '-r', default=2, type=int,
               help='每个任务的最大重试次数（默认: 2）')
 @click.option('--output-dir', '-o', default='outputs', type=str,
               help='输出目录（默认: outputs）')
-def batch(inputs, max_workers, max_iterations, max_retries, output_dir):
+@click.option('--show-logs', is_flag=True,
+              help='按任务分组显示完整执行日志（默认只显示失败任务日志尾部）')
+@click.option('--log-lines', default=40, type=click.IntRange(0),
+              help='失败任务默认显示的日志尾部行数，0 表示不显示（默认: 40）')
+def batch(inputs, max_workers, max_iterations, max_retries, output_dir, show_logs, log_lines):
     """批量生成多个 OJ 题目
     
     支持单个文件、多个文件或目录。
@@ -241,18 +250,15 @@ def batch(inputs, max_workers, max_iterations, max_retries, output_dir):
             files = FileScanner.scan_input(input_path)
             all_files.extend(files)
             input_to_files[input_path] = files
-            click.echo(f"✓ 扫描到 {len(files)} 个文件: {input_path}")
+            click.echo(f"[OK] 扫描到 {len(files)} 个文件: {input_path}")
         except Exception as e:
-            click.echo(f"✗ 扫描失败 {input_path}: {e}", err=True)
+            click.echo(f"[FAIL] 扫描失败 {input_path}: {e}", err=True)
     
     if not all_files:
         click.echo("错误: 未找到任何题目文件", err=True)
         sys.exit(1)
     
     click.echo(f"\n共发现 {len(all_files)} 个题目文件")
-    click.echo(f"并行工作进程: {max_workers}")
-    click.echo(f"最大重试次数: {max_retries}")
-    click.echo("-" * 80)
     
     # 创建任务列表，计算 base_path
     tasks = []
@@ -295,7 +301,10 @@ def batch(inputs, max_workers, max_iterations, max_retries, output_dir):
     try:
         scheduler = TaskScheduler(
             max_workers=max_workers,
-            max_retries=max_retries
+            max_retries=max_retries,
+            max_iterations=max_iterations,
+            show_logs=show_logs,
+            log_lines=log_lines,
         )
         
         results = scheduler.run_batch(tasks)

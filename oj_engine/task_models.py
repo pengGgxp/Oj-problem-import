@@ -30,6 +30,7 @@ class TaskItem:
     start_time: Optional[float] = None
     end_time: Optional[float] = None
     base_path: str = ""  # 用于保持目录结构的基础路径
+    execution_log: str = ""  # 子进程内捕获的执行日志，避免并行输出互相穿插
     
     def duration(self) -> Optional[float]:
         """计算任务执行时长（秒）"""

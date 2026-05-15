@@ -6,8 +6,19 @@ Problem Generation Agent - ReAct Agent for OJ problem content generation
 - 何时执行测试
 - 何时重试或调整策略
 """
+import ast
+import json
+import warnings
+from typing import Any, Iterable
+
+warnings.filterwarnings(
+    "ignore",
+    message=r"The default value of `allowed_objects` will change in a future version.*",
+)
+
+from langchain_core.messages import HumanMessage, SystemMessage
+from langgraph.errors import GraphRecursionError
 from langgraph.prebuilt import create_react_agent
-from langchain_core.prompts import ChatPromptTemplate
 from ..config import settings
 from ..tools import (
     execute_code,
@@ -65,6 +76,13 @@ REACT_SYSTEM_PROMPT = """你是专业的 OJ (Online Judge) 题目测试数据包
 6. 清理临时文件，只保留 `solution.<ext>`、`generator.py`、`tests/`。
 7. 调用 `save_outputs_to_host` 保存产物。
 
+## 可见思考输出
+
+- 在关键阶段输出 1-2 句中文“可见思考摘要”，说明你当前的判断、风险点和下一步动作。
+- 这些内容面向用户阅读，应该具体、有信息量，不要只复述工具名或参数。
+- 不要输出隐藏推理链或冗长逐字推导；保留高层次的题意分析、数据策略、验证结论和修正原因即可。
+- 在重要工具调用前，先用自然语言说明为什么要执行这一步；工具返回后，如结果影响后续方案，也要简短说明。
+
 ## 质量要求
 
 - 样例优先：有样例就必须放在 `tests/1.in` 和 `tests/1.out`。
@@ -100,6 +118,8 @@ class ProblemGenerationAgent:
         Args:
             max_iterations: 最大迭代次数,防止无限循环
         """
+        self.max_iterations = max_iterations
+
         # 获取 LLM 客户端
         self.llm = settings.get_llm_client()
         
@@ -138,6 +158,7 @@ class ProblemGenerationAgent:
         print("[Agent] ProblemGenerationAgent initialized")
         print(f"  - Tools: {len(self.tools)}")
         print(f"  - Max iterations: {max_iterations}")
+        print(f"  - LangGraph recursion limit: {self._get_graph_recursion_limit()}")
     
     def __enter__(self):
         """上下文管理器入口:初始化沙箱会话"""
@@ -252,7 +273,7 @@ save_outputs_to_host(problem_title="题目名称")
 - **最终沙箱中只能有**: solution.<ext>, generator.py, tests/ 目录
 - **必须删除所有临时文件**后再调用 save_outputs_to_host
 {base_path_instruction}
-请逐步思考并执行,确保最终产物完整可用。
+请按阶段给出可见思考摘要并执行，确保最终产物完整可用。
 
 最后,请以 JSON 格式总结你的工作成果:
 {{{{
@@ -268,9 +289,10 @@ save_outputs_to_host(problem_title="题目名称")
         
         # 执行 Agent
         try:
-            result = self.agent_executor.invoke({
-                "messages": [{"role": "user", "content": full_prompt}]
-            })
+            result = self._run_agent_with_visible_output(
+                full_prompt,
+                problem_description=problem_description,
+            )
             
             print("\n[Agent] Task completed!")
             return result
@@ -320,3 +342,305 @@ save_outputs_to_host(problem_title="题目名称")
                     print("[Agent] Retrying...")
         
         raise Exception(f"All {max_retries} attempts failed. Last error: {last_error}")
+
+    def _run_agent_with_visible_output(self, full_prompt: str, problem_description: str = "") -> dict:
+        """
+        流式执行 Agent，并将模型产生的自然语言内容打印出来。
+
+        ReAct Agent 的很多步骤会直接进入 tool_calls，终端上看起来只剩工具日志。
+        这里保留工具执行能力，同时捕捉 AIMessage.content 里的“可见思考摘要”，
+        让 CLI 和调用方可以看到 LLM 的阶段性判断。
+        """
+        input_state = {"messages": [{"role": "user", "content": full_prompt}]}
+        config = {"recursion_limit": self._get_graph_recursion_limit()}
+        printed_signatures = set()
+        final_state = None
+
+        try:
+            for state in self.agent_executor.stream(
+                input_state,
+                config=config,
+                stream_mode="values",
+            ):
+                final_state = state
+                self._print_new_visible_messages(
+                    state.get("messages", []),
+                    printed_signatures,
+                )
+        except GraphRecursionError as exc:
+            if final_state is not None:
+                partial_result = self._attach_visible_output(
+                    final_state,
+                    problem_description=problem_description,
+                )
+                output_path = partial_result.get("output_path", "")
+                if output_path:
+                    partial_result["warning"] = str(exc)
+                    print(
+                        "\n[Agent] 已达到图步数上限，但检测到产物已保存，"
+                        f"输出目录: {output_path}"
+                    )
+                    return partial_result
+
+            raise RuntimeError(
+                "Agent 执行达到图步数上限。当前 --max-iterations "
+                f"为 {self.max_iterations}，对应 LangGraph recursion_limit "
+                f"为 {config['recursion_limit']}。请使用更大的值重试，"
+                "例如 `-m 80`；如果持续出现，说明模型可能在某一步反复调用工具。"
+            ) from exc
+
+        if final_state is None:
+            final_state = self.agent_executor.invoke(input_state, config=config)
+            self._print_new_visible_messages(
+                final_state.get("messages", []),
+                printed_signatures,
+            )
+
+        return self._attach_visible_output(final_state, problem_description=problem_description)
+
+    def _get_graph_recursion_limit(self) -> int:
+        """
+        将面向用户的 max_iterations 换算成 LangGraph 节点步数。
+
+        一次 ReAct 工具轮次通常至少包含 assistant/tool 两个图节点；
+        生成 OJ 数据包还会批量写入 tests/*.in、tests/*.out 并多次验证，
+        所以默认 20 轮需要明显高于 45 的图步数。
+        """
+        return self.get_graph_recursion_limit(self.max_iterations)
+
+    @staticmethod
+    def get_graph_recursion_limit(max_iterations: int) -> int:
+        """根据用户配置的 Agent 迭代轮次计算 LangGraph 图步数上限。"""
+        return max(120, max_iterations * 6)
+
+    def _print_new_visible_messages(
+        self,
+        messages: Iterable[Any],
+        printed_signatures: set,
+    ) -> None:
+        """打印尚未展示过的 AI 自然语言消息。"""
+        for message in messages:
+            if not self._is_ai_message(message):
+                continue
+
+            content = self._message_content_to_text(getattr(message, "content", "")).strip()
+            if not content:
+                continue
+
+            signature = (
+                getattr(message, "id", None)
+                or (getattr(message, "type", ""), content)
+            )
+            if signature in printed_signatures:
+                continue
+
+            printed_signatures.add(signature)
+            print("\n[AI 可见思考]")
+            print(content)
+
+    def _attach_visible_output(self, result: dict, problem_description: str = "") -> dict:
+        """把 AI 可见思考和最终总结汇总到 result['output']。"""
+        if not isinstance(result, dict):
+            return {"output": self._message_content_to_text(result)}
+
+        messages = result.get("messages", [])
+        visible_messages = self._collect_visible_ai_text(messages)
+
+        if visible_messages and self._has_visible_narrative(visible_messages):
+            result["output"] = "\n\n".join(visible_messages)
+        else:
+            summary = self._generate_execution_summary(
+                messages,
+                problem_description=problem_description,
+            )
+            if summary:
+                print("\n[AI 可见思考]")
+                print(summary)
+            output_parts = []
+            if summary:
+                output_parts.append(summary)
+            if visible_messages:
+                output_parts.append("原始结果:\n" + "\n\n".join(visible_messages))
+
+            result["output"] = "\n\n".join(output_parts) or (
+                "AI 本次没有返回可见思考文本，仅产生了工具调用消息。"
+                "请检查模型是否支持在工具调用前返回文本，或调整提示词后重试。"
+            )
+
+        output_path = self._extract_output_path(messages)
+        if output_path:
+            result["output_path"] = output_path
+
+        return result
+
+    def _collect_visible_ai_text(self, messages: Iterable[Any]) -> list[str]:
+        """提取所有 AIMessage 中面向用户的自然语言内容。"""
+        visible_messages = []
+
+        for message in messages:
+            if not self._is_ai_message(message):
+                continue
+
+            content = self._message_content_to_text(getattr(message, "content", "")).strip()
+            if content:
+                visible_messages.append(content)
+
+        return visible_messages
+
+    def _has_visible_narrative(self, visible_messages: list[str]) -> bool:
+        """判断可见消息里是否包含 JSON 之外的自然语言说明。"""
+        return any(
+            not self._looks_like_structured_payload(message)
+            for message in visible_messages
+        )
+
+    def _looks_like_structured_payload(self, text: str) -> bool:
+        stripped = text.strip()
+        if not stripped:
+            return True
+
+        if stripped.startswith("```"):
+            lines = stripped.splitlines()
+            if len(lines) >= 3 and lines[-1].strip() == "```":
+                stripped = "\n".join(lines[1:-1]).strip()
+
+        return stripped.startswith("{") and stripped.endswith("}") and bool(
+            self._parse_dict_from_text(stripped)
+        )
+
+    def _extract_output_path(self, messages: Iterable[Any]) -> str:
+        """从 AI 最终总结或 save_outputs_to_host 的工具结果中提取 output_path。"""
+        for message in reversed(list(messages)):
+            if not (self._is_ai_message(message) or self._is_tool_message(message)):
+                continue
+
+            content = getattr(message, "content", "")
+            for data in self._iter_content_dicts(content):
+                output_path = data.get("output_path")
+                if output_path:
+                    return str(output_path)
+
+            text = self._message_content_to_text(content)
+            parsed = self._parse_dict_from_text(text)
+            if parsed and parsed.get("output_path"):
+                return str(parsed["output_path"])
+
+        return ""
+
+    @staticmethod
+    def _is_ai_message(message: Any) -> bool:
+        message_type = getattr(message, "type", "") or getattr(message, "role", "")
+        return message_type == "ai" or message.__class__.__name__ == "AIMessage"
+
+    @staticmethod
+    def _is_tool_message(message: Any) -> bool:
+        message_type = getattr(message, "type", "") or getattr(message, "role", "")
+        return message_type == "tool" or message.__class__.__name__ == "ToolMessage"
+
+    @classmethod
+    def _message_content_to_text(cls, content: Any) -> str:
+        """兼容 LangChain 文本、分块列表和 dict 形式的消息内容。"""
+        if content is None:
+            return ""
+        if isinstance(content, str):
+            return content
+        if isinstance(content, dict):
+            return json.dumps(content, ensure_ascii=False)
+        if isinstance(content, list):
+            parts = []
+            for item in content:
+                if isinstance(item, str):
+                    parts.append(item)
+                elif isinstance(item, dict):
+                    text = item.get("text") or item.get("content")
+                    if text:
+                        parts.append(cls._message_content_to_text(text))
+                else:
+                    parts.append(str(item))
+            return "\n".join(part for part in parts if part)
+        return str(content)
+
+    @classmethod
+    def _iter_content_dicts(cls, content: Any) -> Iterable[dict]:
+        if isinstance(content, dict):
+            yield content
+            return
+
+        if isinstance(content, list):
+            for item in content:
+                yield from cls._iter_content_dicts(item)
+
+    @staticmethod
+    def _parse_dict_from_text(text: str) -> dict:
+        if not text or "{" not in text or "}" not in text:
+            return {}
+
+        snippet = text[text.find("{"):text.rfind("}") + 1]
+        for loader in (json.loads, ast.literal_eval):
+            try:
+                data = loader(snippet)
+                if isinstance(data, dict):
+                    return data
+            except Exception:
+                continue
+
+        return {}
+
+    def _generate_execution_summary(self, messages: Iterable[Any], problem_description: str = "") -> str:
+        """
+        基于执行记录生成一段可展示给用户的中文总结。
+
+        这是可见输出的兜底层，避免整个流程只剩工具日志。
+        """
+        execution_log = self._build_execution_log(messages)
+        summary_prompt = [
+            SystemMessage(
+                content=(
+                    "你是一个执行总结助手。"
+                    "请根据题目描述和执行记录，用中文输出 3-5 句简短总结。"
+                    "只写高层思路和结果，不要泄露隐藏推理链，不要复述工具原文。"
+                    "必须包含：题意判断、执行/验证状态、产物结果或遗留风险。"
+                )
+            ),
+            HumanMessage(
+                content=(
+                    f"题目描述摘要:\n{problem_description[:1200] or '(未提供)'}\n\n"
+                    f"执行记录摘要:\n{execution_log or '(无可用记录)'}\n\n"
+                    "请输出一段可直接展示给用户的“可见思考与总结”。"
+                )
+            ),
+        ]
+
+        try:
+            response = self.llm.invoke(summary_prompt)
+            summary = self._message_content_to_text(getattr(response, "content", response)).strip()
+            if summary:
+                return summary
+        except Exception as exc:
+            print(f"[Agent] Summary generation skipped: {exc}")
+
+        return ""
+
+    def _build_execution_log(self, messages: Iterable[Any]) -> str:
+        """把消息压缩成适合二次总结的简短执行日志。"""
+        entries = []
+
+        for message in messages:
+            role = getattr(message, "type", "") or getattr(message, "role", "") or message.__class__.__name__
+            if self._is_tool_message(message):
+                role = getattr(message, "name", "") or "tool"
+            elif self._is_ai_message(message):
+                role = "assistant"
+            else:
+                role = role.lower()
+
+            content = self._message_content_to_text(getattr(message, "content", "")).strip()
+            if not content:
+                continue
+
+            if len(content) > 700:
+                content = content[:700] + "..."
+
+            entries.append(f"{role}: {content}")
+
+        return "\n".join(entries[-20:])
