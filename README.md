@@ -90,17 +90,17 @@ oj-problem-import show-config
 
 #### 方式一：命令行工具（推荐）
 
-安装依赖后，可以直接使用 `oj-problem-import` 命令：
+安装依赖后，可以直接使用 `oj-problem-import` 命令。文件内容会被当作完整任务提示词交给 AI 处理：
 
 ```bash
 # 查看帮助
 oj-problem-import --help
 oj-problem-import generate --help
 
-# 从文件读取题目描述
+# 从文件读取任务内容
 oj-problem-import generate -f problem.txt
 
-# 直接传入题目描述
+# 直接传入任务内容
 oj-problem-import generate -d "A+B Problem..."
 
 # 自定义参数
