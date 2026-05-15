@@ -11,6 +11,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, Dict, List, Mapping, Optional
 from .state import ExecutionResult
+from .user_messages import format_user_friendly_error
 
 
 CommandBuilder = Callable[[str], str]
@@ -265,13 +266,7 @@ class SandboxSession:
             self.client = docker.from_env()
             self.client.ping()
         except docker.errors.DockerException as e:
-            raise RuntimeError(
-                f"无法连接到 Docker Daemon。请确保:\n"
-                f"1. Docker Desktop 正在运行\n"
-                f"2. Docker Daemon 已启动\n"
-                f"3. 当前用户有 Docker 权限\n"
-                f"错误详情: {str(e)}"
-            )
+            raise RuntimeError(format_user_friendly_error(e, action="连接 Docker")) from e
 
     def _ensure_workspace(self):
         if self.work_dir:
@@ -290,18 +285,25 @@ class SandboxSession:
         self._ensure_workspace()
         spec = self.runtime_specs[language]
 
-        # 启动容器
-        container = self.client.containers.run(
-            image=spec.image,
-            command="sleep infinity",
-            detach=True,
-            mem_limit=self.mem_limit,
-            cpu_quota=self.cpu_quota,
-            network_disabled=True,
-            volumes={self.work_dir: {'bind': '/workspace', 'mode': 'rw'}},
-            tmpfs={'/tmp': 'rw,noexec,nosuid,size=100m'},
-            working_dir='/workspace'
-        )
+        try:
+            container = self.client.containers.run(
+                image=spec.image,
+                command="sleep infinity",
+                detach=True,
+                mem_limit=self.mem_limit,
+                cpu_quota=self.cpu_quota,
+                network_disabled=True,
+                volumes={self.work_dir: {'bind': '/workspace', 'mode': 'rw'}},
+                tmpfs={'/tmp': 'rw,noexec,nosuid,size=100m'},
+                working_dir='/workspace'
+            )
+        except docker.errors.ImageNotFound as e:
+            raise RuntimeError(
+                f"Docker 镜像 {spec.image} 不存在或无法下载。\n"
+                f"请确认网络可用后运行 `docker pull {spec.image}`，然后重试。"
+            ) from e
+        except docker.errors.DockerException as e:
+            raise RuntimeError(format_user_friendly_error(e, action="启动 Docker 容器")) from e
 
         self.containers[language] = container
         self.container = container
@@ -455,7 +457,7 @@ class SandboxSession:
             文件内容字符串
         """
         if not self.work_dir:
-            raise RuntimeError("SandboxSession not initialized")
+            raise RuntimeError("沙箱尚未初始化")
 
         filepath = self._resolve_workspace_path(filename)
         with open(filepath, 'r', encoding='utf-8') as f:
@@ -494,13 +496,7 @@ class SandboxExecutor:
             # 测试连接
             self.client.ping()
         except docker.errors.DockerException as e:
-            raise RuntimeError(
-                f"无法连接到 Docker Daemon。请确保:\n"
-                f"1. Docker Desktop 正在运行\n"
-                f"2. Docker Daemon 已启动\n"
-                f"3. 当前用户有 Docker 权限\n"
-                f"错误详情: {str(e)}"
-            )
+            raise RuntimeError(format_user_friendly_error(e, action="连接 Docker")) from e
     
     def execute(self, files: Dict[str, str], commands: List[str], 
                 timeout: int = 30) -> ExecutionResult:
@@ -605,14 +601,14 @@ class SandboxExecutor:
             return ExecutionResult(
                 status="error",
                 exit_code=-1,
-                stderr=str(e),
+                stderr=format_user_friendly_error(e, action="执行 Docker 容器"),
                 error_type="container_error"
             )
         except Exception as e:
             return ExecutionResult(
                 status="error",
                 exit_code=-1,
-                stderr=str(e),
+                stderr=format_user_friendly_error(e, action="执行沙箱"),
                 error_type="system_error"
             )
         finally:
@@ -649,4 +645,5 @@ class SandboxExecutor:
         
         result = container.exec_run(cmd)
         if result.exit_code != 0:
-            raise RuntimeError(f"Failed to write file {filename}: {result.output.decode()}")
+            detail = result.output.decode(errors="ignore").strip()
+            raise RuntimeError(f"写入沙箱文件失败: {filename}。{detail}")

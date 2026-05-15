@@ -21,6 +21,7 @@ from ..tools import (
     set_global_sandbox_session,
 )
 from ..sandbox import SandboxSession
+from ..user_messages import format_user_friendly_error
 
 
 # ReAct System Prompt
@@ -276,7 +277,7 @@ save_outputs_to_host(problem_title="题目名称")
             return result
             
         except Exception as e:
-            print(f"\n[Agent] Error: {str(e)}")
+            print(f"\n[Agent] Error: {format_user_friendly_error(e, action='生成题目')}")
             raise
     
     def generate_problem_with_retry(self, problem_description: str,
@@ -315,7 +316,7 @@ save_outputs_to_host(problem_title="题目名称")
                 
             except Exception as e:
                 last_error = e
-                print(f"[Agent] Attempt {attempt} failed: {str(e)}")
+                print(f"[Agent] Attempt {attempt} failed: {format_user_friendly_error(e, action='生成题目')}")
                 if attempt < max_retries:
                     print("[Agent] Retrying...")
         
