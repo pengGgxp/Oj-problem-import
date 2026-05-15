@@ -1,6 +1,7 @@
 """Sandbox tools for Agent execution"""
 from .sandbox_tools import (
     execute_code,
+    supported_sandbox_languages,
     write_code_file,
     read_file_content,
     edit_file_content,
@@ -12,6 +13,7 @@ from .sandbox_tools import (
 
 __all__ = [
     "execute_code",
+    "supported_sandbox_languages",
     "write_code_file",
     "read_file_content",
     "edit_file_content",
