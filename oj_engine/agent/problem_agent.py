@@ -192,8 +192,6 @@ class ProblemGenerationAgent:
         Args:
             problem_description: 任务文件内容/题目描述文本。用户可以在其中写入题面、生成要求、标程或语言要求。
             base_path: 基础路径（可选），用于保持目录结构。例如 "problems/easy"
-            official_solution: 用户提供的官方题解/标程代码（可选）
-            solution_language: 官方题解语言（可选，未提供时由 Agent 判断）
             
         Returns:
             dict 包含 Agent 执行的完整结果
@@ -202,10 +200,6 @@ class ProblemGenerationAgent:
         print(f"  Problem: {problem_description[:100]}...")
         if base_path:
             print(f"  Base path: {base_path}")
-        if official_solution:
-            print(f"  Official solution: provided ({len(official_solution)} chars)")
-        if solution_language:
-            print(f"  Solution language: {solution_language}")
         
         # 构建完整的消息 (系统提示 + 任务指令)
         base_path_instruction = ""
@@ -234,8 +228,6 @@ save_outputs_to_host(problem_title="题目名称")
 
 任务文件内容:
 {problem_description}
-
-{official_solution_instruction}
 
 要求:
 1. 生成或保存正确的标答代码 `solution.<ext>`；如果任务文件包含标程/参考代码，优先原样使用并根据内容自动判断语言；否则默认生成 Python 标答，除非任务文件明确要求其他语言
@@ -283,9 +275,7 @@ save_outputs_to_host(problem_title="题目名称")
     
     def generate_problem_with_retry(self, problem_description: str,
                                      max_retries: int = 2,
-                                     base_path: str = "",
-                                     official_solution: str = "",
-                                     solution_language: str = "") -> dict:
+                                     base_path: str = "") -> dict:
         """
         带重试机制的问题生成
         
@@ -293,8 +283,6 @@ save_outputs_to_host(problem_title="题目名称")
             problem_description: 题目描述
             max_retries: 最大重试次数
             base_path: 基础路径（可选），用于保持目录结构
-            official_solution: 用户提供的官方题解/标程代码（可选）
-            solution_language: 官方题解语言（可选）
             
         Returns:
             Agent 执行结果

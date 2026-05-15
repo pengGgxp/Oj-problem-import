@@ -31,11 +31,7 @@ def main():
               help='Agent 最大迭代轮次（默认: 20，会自动换算为 LangGraph 图步数上限）')
 @click.option('--output-dir', '-o', default='outputs', type=str,
               help='输出目录（默认: outputs）')
-@click.option('--solution-file', '-s', type=click.Path(exists=True),
-              help='官方题解/标程文件路径（可选，支持多语言）')
-@click.option('--solution-language', '-l', type=str,
-              help='官方题解语言（可选，如 python/cpp/c/java/javascript/go/rust）')
-def generate(file_path, description, max_iterations, output_dir, solution_file, solution_language):
+def generate(file_path, description, max_iterations, output_dir):
     """生成 OJ 题目测试数据包
     
     根据任务文件或任务文本自动生成：
@@ -50,18 +46,15 @@ def generate(file_path, description, max_iterations, output_dir, solution_file, 
         # 直接传入任务内容
         oj-problem-import generate -d "A+B Problem..."
 
-        # 使用官方 C++ 题解生成输出
-        oj-problem-import generate -f problem.txt -s solution.cpp -l cpp
-        
         # 自定义参数
         oj-problem-import generate -f problem.txt -m 30 -o ./results
     """
     # 检查配置
     if not is_configured():
-        click.echo("\n⚠ 检测到未配置，启动配置向导...\n")
+        click.echo("\n[WARN] 检测到未配置，启动配置向导...\n")
         success = run_config_wizard()
         if not success:
-            click.echo("\n✗ 配置失败，无法继续执行", err=True)
+            click.echo("\n[FAIL] 配置失败，无法继续执行", err=True)
             sys.exit(1)
         click.echo("\n配置完成！继续执行任务...\n")
     
@@ -76,10 +69,10 @@ def generate(file_path, description, max_iterations, output_dir, solution_file, 
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 problem_description = f.read()
-            click.echo(f"✓ 已从文件读取任务内容: {file_path}")
         except Exception as e:
             click.echo(f"错误: 无法读取文件 {file_path}: {e}", err=True)
             sys.exit(1)
+        click.echo(f"[OK] 已从文件读取任务内容: {file_path}")
     else:
         problem_description = description
     
@@ -88,16 +81,6 @@ def generate(file_path, description, max_iterations, output_dir, solution_file, 
         click.echo("错误: 任务内容不能为空", err=True)
         sys.exit(1)
 
-    official_solution = ""
-    if solution_file:
-        try:
-            with open(solution_file, 'r', encoding='utf-8') as f:
-                official_solution = f.read()
-            click.echo(f"✓ 已从文件读取官方题解: {solution_file}")
-        except Exception as e:
-            click.echo(f"错误: 无法读取官方题解文件 {solution_file}: {e}", err=True)
-            sys.exit(1)
-    
     # 显示配置信息
     click.echo("\n" + "=" * 80)
     click.echo("oj problem import - 任务生成")
@@ -117,11 +100,7 @@ def generate(file_path, description, max_iterations, output_dir, solution_file, 
         click.echo("\n开始生成题目...\n")
         
         with ProblemGenerationAgent(max_iterations=max_iterations) as agent:
-            result = agent.generate_problem(
-                problem_description,
-                official_solution=official_solution,
-                solution_language=solution_language or "",
-            )
+            result = agent.generate_problem(problem_description)
         
         # 显示结果
         click.echo("\n" + "=" * 80)
@@ -138,7 +117,7 @@ def generate(file_path, description, max_iterations, output_dir, solution_file, 
         # 显示产物保存路径
         outputs_dir = Path(output_dir)
         if outputs_dir.exists():
-            click.echo(f"\n✓ 产物已保存到: {outputs_dir.absolute()}")
+            click.echo(f"\n[OK] 产物已保存到: {outputs_dir.absolute()}")
             
             # 列出最新的输出
             output_dirs = sorted(outputs_dir.iterdir(), 
@@ -154,12 +133,12 @@ def generate(file_path, description, max_iterations, output_dir, solution_file, 
                         rel_path = item.relative_to(latest)
                         click.echo(f"    {rel_path}")
         else:
-            click.echo(f"\n⚠ 未找到输出目录: {outputs_dir}")
+            click.echo(f"\n[WARN] 未找到输出目录: {outputs_dir}")
         
         click.echo("\n" + "=" * 80)
         
     except Exception as e:
-        click.echo(f"\n✗ 错误: {str(e)}", err=True)
+        click.echo(f"\n[FAIL] 错误: {str(e)}", err=True)
         if str(e).startswith("Agent 执行达到图步数上限"):
             sys.exit(1)
 
@@ -261,17 +240,17 @@ def batch(inputs, max_workers, max_iterations, max_retries, output_dir, show_log
         # 自定义参数
         oj-problem-import batch ./problems/ -w 8 -r 3
     """
-    from .file_scanner import FileScanner
-    from .task_scheduler import TaskScheduler
-    from .task_models import TaskItem, TaskStatus
+    from oj_engine.file_scanner import FileScanner
+    from oj_engine.task_scheduler import TaskScheduler
+    from oj_engine.task_models import TaskItem, TaskStatus
     import uuid
     
     # 检查配置
     if not is_configured():
-        click.echo("\n⚠ 检测到未配置，启动配置向导...\n")
+        click.echo("\n[WARN] 检测到未配置，启动配置向导...\n")
         success = run_config_wizard()
         if not success:
-            click.echo("\n✗ 配置失败，无法继续执行", err=True)
+            click.echo("\n[FAIL] 配置失败，无法继续执行", err=True)
             sys.exit(1)
         click.echo("\n配置完成！继续执行任务...\n")
 
@@ -361,7 +340,7 @@ def batch(inputs, max_workers, max_iterations, max_retries, output_dir, show_log
             sys.exit(1)
         
     except Exception as e:
-        click.echo(f"\n✗ {format_user_friendly_error(e, action='批量任务调度')}", err=True)
+        click.echo(f"\n[FAIL] {format_user_friendly_error(e, action='批量任务调度')}", err=True)
         sys.exit(1)
 
 

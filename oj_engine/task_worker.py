@@ -64,14 +64,14 @@ class TaskWorker:
             task.output_path = output_path
             task.status = TaskStatus.SUCCESS
             
-            print(f"[Worker][{task.task_id}] ✓ 完成: {problem_title}")
+            print(f"[Worker][{task.task_id}] [OK] 完成: {problem_title}")
             if output_path:
                 print(f"  输出: {output_path}")
             
         except Exception as e:
             task.status = TaskStatus.FAILED
             task.error_message = str(e)
-            print(f"[Worker][{task.task_id}] ✗ 失败: {task.problem_title} - {str(e)[:100]}")
+            print(f"[Worker][{task.task_id}] [FAIL] 失败: {task.problem_title} - {str(e)[:100]}")
         
         finally:
             task.end_time = time.time()
