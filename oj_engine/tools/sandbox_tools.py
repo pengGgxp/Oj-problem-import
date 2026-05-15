@@ -91,8 +91,6 @@ def execute_code(code_file: str, input_file: str = "", timeout: int = 5, languag
         - stdout: 标准输出
         - stderr: 标准错误
         - exit_code: 退出码 (0表示成功)
-        - execution_time: 执行时间(秒)
-        - memory_usage: 内存使用(MB)
         - language: 实际使用的语言
         - image: 实际使用的 Docker 镜像
         - status: "success" 或 "error"
@@ -114,10 +112,6 @@ def execute_code(code_file: str, input_file: str = "", timeout: int = 5, languag
             language=language,
         )
         
-        # 获取资源使用情况(简化版)
-        stats = session.container.stats(stream=False) if session.container else {}
-        memory_usage = stats['memory_stats']['usage'] / (1024 * 1024) if 'memory_stats' in stats else 0
-        
         # 判断执行状态
         status = "success"
         error_type = None
@@ -135,8 +129,6 @@ def execute_code(code_file: str, input_file: str = "", timeout: int = 5, languag
             "stdout": result["stdout"],
             "stderr": result["stderr"],
             "exit_code": result["exit_code"],
-            "execution_time": 0.0,  # TODO: 精确计时需要更复杂的实现
-            "memory_usage": memory_usage,
             "status": status,
             "language": result.get("language", language),
             "image": result.get("image", ""),
@@ -148,8 +140,6 @@ def execute_code(code_file: str, input_file: str = "", timeout: int = 5, languag
             "status": "error",
             "stderr": format_user_friendly_error(e, action="执行代码"),
             "exit_code": -1,
-            "execution_time": 0,
-            "memory_usage": 0,
             "language": language,
             "image": "",
             "command": "",

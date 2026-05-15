@@ -29,8 +29,6 @@ class ExecutionResult(BaseModel):
     exit_code: int = Field(default=0)
     stdout: str = Field(default="")
     stderr: str = Field(default="")
-    execution_time: float = Field(default=0.0, description="执行时间(秒)")
-    memory_usage: float = Field(default=0.0, description="内存使用(MB)")
     error_type: Optional[str] = Field(default=None, description="错误类型")
 
 

@@ -592,14 +592,14 @@ class SandboxSession:
             demux=True,
             workdir='/workspace'
         )
-        
+
         stdout = exec_result.output[0].decode('utf-8', errors='ignore') if exec_result.output[0] else ""
         stderr = exec_result.output[1].decode('utf-8', errors='ignore') if exec_result.output[1] else ""
         
         return {
             "stdout": stdout,
             "stderr": stderr,
-            "exit_code": exec_result.exit_code
+            "exit_code": exec_result.exit_code,
         }
 
     def _with_timeout(self, cmd: str, timeout: int) -> str:
@@ -742,7 +742,7 @@ class SandboxExecutor:
             all_stdout = []
             all_stderr = []
             exit_code = 0
-            
+
             for cmd in commands:
                 # 将命令中的 /tmp 替换为 /workspace
                 cmd = cmd.replace('/tmp', '/workspace')
@@ -764,10 +764,6 @@ class SandboxExecutor:
                     exit_code = exec_result.exit_code
                     break
             
-            # 获取资源使用情况(简化版)
-            stats = container.stats(stream=False)
-            memory_usage = stats['memory_stats']['usage'] / (1024 * 1024) if 'memory_stats' in stats else 0
-            
             # 判断执行状态
             status = "success"
             error_type = None
@@ -786,8 +782,6 @@ class SandboxExecutor:
                 exit_code=exit_code,
                 stdout="\n".join(all_stdout),
                 stderr=combined_stderr,
-                execution_time=0.0,  # TODO: 精确计时需要更复杂的实现
-                memory_usage=memory_usage,
                 error_type=error_type
             )
             

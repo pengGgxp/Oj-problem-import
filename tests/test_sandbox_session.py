@@ -56,7 +56,7 @@ class SandboxSessionTests(unittest.TestCase):
 
                 session.initialize("python")
                 session.initialize("cpp")
-                session.execute_command("true", language="python")
+                result = session.execute_command("true", language="python")
 
                 self.assertEqual(len(fake_client.containers.run_calls), 2)
                 mounted_paths = {
@@ -73,6 +73,8 @@ class SandboxSessionTests(unittest.TestCase):
                 self.assertTrue(
                     all(container.remove_calls == 0 for container in fake_client.containers.created)
                 )
+                self.assertNotIn("execution_time", result)
+                self.assertNotIn("memory_usage", result)
 
                 session.cleanup()
 
